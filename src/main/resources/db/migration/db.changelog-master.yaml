@@ -101,4 +101,41 @@ databaseChangeLog:
                 CREATE TRIGGER trg_card_updated_at
                 BEFORE UPDATE ON card
                 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-                
+
+  - changeSet:
+      id: 006-owner-add-role
+      author: LPF-24
+      changes:
+        - addColumn:
+            tableName: owner
+            columns:
+              - column:
+                  name: role
+                  type: "VARCHAR(16)"
+                  defaultValue: "USER"
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: |
+              ALTER TABLE owner
+              ADD CONSTRAINT chk_owner_role_values
+              CHECK (role IN ('USER','ADMIN'));     
+
+  - changeSet:
+      id: 007-fix-currency-type
+      author: LPF-24
+      changes:
+        - modifyDataType:
+            tableName: card
+            columnName: currency
+            newDataType: VARCHAR(3)
+
+  - changeSet:
+      id: 008-fix-pan-last4-type
+      author: LPF-24
+      changes:
+        - modifyDataType:
+            tableName: card
+            columnName: pan_last4
+            newDataType: VARCHAR(4)
+
