@@ -1,0 +1,6 @@
+# запуск приложения из IDE
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/bank_db
+    username: postgres
+    password: postgres

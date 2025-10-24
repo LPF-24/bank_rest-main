@@ -1,0 +1,44 @@
+#
+# application.yml — главный конфигурационный файл Spring Boot.
+
+Что нужно сделать:
+  - Указать настройки подключения к базе данных.
+  - Указать порт приложения.
+  - Настроить параметры безопасности и JWT.
+  - Включить Swagger UI.
+
+spring:
+  application:
+    name: bank_rest-main
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/migration/db.changelog-master.yaml
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.orm.jpa: DEBUG
+    org.springframework.jdbc.core: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+      endpoint:
+        health:
+          show-details: always

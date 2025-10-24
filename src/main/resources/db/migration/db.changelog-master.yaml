@@ -1,0 +1,104 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-card-status-type
+      author: LPF-24
+      preConditions:
+        onFail: MARK_RAN
+        onError: HALT
+        sqlCheck:
+          expectedResult: "0"
+          sql: "SELECT COUNT(*) FROM pg_type WHERE typname = 'card_status'"
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: false
+            sql: |
+              DO $$
+              BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'card_status') THEN
+                  CREATE TYPE card_status AS ENUM ('ACTIVE','BLOCKED','EXPIRED');
+                END IF;
+              END $$;
+
+  - changeSet:
+      id: 002-owner-table
+      author: LPF-24
+      changes:
+        - createTable:
+            tableName: owner
+            columns:
+              - column: { name: id, type: BIGSERIAL, constraints: { primaryKey: true } }
+              - column: { name: first_name, type: "VARCHAR(100)", constraints: { nullable: false } }
+              - column: { name: last_name, type: "VARCHAR(100)", constraints: { nullable: false } }
+              - column: { name: date_of_birth, type: DATE }
+              - column: { name: email, type: "VARCHAR(320)", constraints: { nullable: false, unique: true } }
+              - column: { name: phone_e164, type: "VARCHAR(20)" }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: NOW() }
+              - column: { name: updated_at, type: TIMESTAMP, defaultValueComputed: NOW() }
+
+  - changeSet:
+      id: 003-card-table
+      author: LPF-24
+      changes:
+        - createTable:
+            tableName: card
+            columns:
+              - column: { name: id, type: BIGSERIAL, constraints: { primaryKey: true } }
+              - column:
+                  name: owner_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    referencedTableName: owner
+                    referencedColumnNames: id
+                    foreignKeyName: fk_card_owner
+                    onDelete: RESTRICT
+              - column: { name: pan_encrypted, type: BYTEA, constraints: { nullable: false } }
+              - column: { name: pan_last4, type: "CHAR(4)", constraints: { nullable: false } }
+              - column: { name: bin, type: "VARCHAR(8)" }
+              - column: { name: expiry_month, type: SMALLINT, constraints: { nullable: false } }
+              - column: { name: expiry_year,  type: SMALLINT, constraints: { nullable: false } }
+              - column: { name: status, type: card_status, defaultValue: "ACTIVE", constraints: { nullable: false } }
+              - column: { name: balance, type: "NUMERIC(19,2)", defaultValue: "0.00", constraints: { nullable: false } }
+              - column: { name: currency, type: "CHAR(3)", defaultValue: "RUB", constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: NOW() }
+              - column: { name: updated_at, type: TIMESTAMP, defaultValueComputed: NOW() }
+        - addUniqueConstraint:
+            tableName: card
+            columnNames: owner_id, pan_last4, expiry_month, expiry_year
+            constraintName: uq_card_owner_last4_exp
+        - createIndex: { tableName: card, indexName: idx_card_owner,  columns: [ { name: owner_id } ] }
+        - createIndex: { tableName: card, indexName: idx_card_status, columns: [ { name: status } ] }
+        - createIndex: { tableName: card, indexName: idx_card_last4,  columns: [ { name: pan_last4 } ] }
+
+  - changeSet:
+      id: 004-updated-at-triggers-fn
+      author: LPF-24
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: false
+            sql: |
+              CREATE OR REPLACE FUNCTION set_updated_at()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;
+
+  - changeSet:
+      id: 005-updated-at-triggers-bind
+      author: LPF-24
+      changes:
+          - sql:
+              sql: |
+                CREATE TRIGGER trg_owner_updated_at
+                BEFORE UPDATE ON owner
+                FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+          - sql:
+              sql: |
+                CREATE TRIGGER trg_card_updated_at
+                BEFORE UPDATE ON card
+                FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+                
