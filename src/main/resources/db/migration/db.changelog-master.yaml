@@ -139,3 +139,24 @@ databaseChangeLog:
             columnName: pan_last4
             newDataType: VARCHAR(4)
 
+  - changeSet:
+      id: 009-owner-add-password
+      author: LPF-24
+      changes:
+        - addColumn:
+            tableName: owner
+            columns:
+              - column:
+                  name: password
+                  type: "VARCHAR(255)"
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 010-fix-email-length
+      author: LPF-24
+      changes:
+        - modifyDataType:
+            tableName: owner
+            columnName: email
+            newDataType: VARCHAR(100)

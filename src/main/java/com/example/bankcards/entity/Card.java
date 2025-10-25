@@ -1,6 +1,7 @@
 package com.example.bankcards.entity;
 
 import com.example.bankcards.util.PanAttributeConverter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ public class Card {
 
     @Column(name = "pan_encrypted", nullable = false, columnDefinition = "BYTEA")
     @Lob
+    @JsonIgnore
     @Convert(converter = PanAttributeConverter.class)
     private String pan;
 
@@ -32,7 +34,7 @@ public class Card {
     @Column(name = "expiry_month", nullable = false)
     private short expiryMonth;
 
-    @Column(name = "expiry_year", nullable = false) // исправлено!
+    @Column(name = "expiry_year", nullable = false)
     private short expiryYear;
 
     @Enumerated(EnumType.STRING)

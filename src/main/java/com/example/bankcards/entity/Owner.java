@@ -40,6 +40,10 @@ public class Owner {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
+    @Column(nullable = false, length = 255)
+    @JsonIgnore
+    private String password;
+
     @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
     @JsonIgnore
     private List<Card> cards;
@@ -117,6 +121,14 @@ public class Owner {
 
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     @Override
