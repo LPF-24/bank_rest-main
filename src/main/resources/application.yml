@@ -42,3 +42,5 @@ management:
       endpoint:
         health:
           show-details: always
+
+jwt_secret: 8f2e4b0093a94c35b6d17fcf0a51980485ae71b4f6f064f3869e7092e7b40acd
