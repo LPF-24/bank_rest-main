@@ -2,15 +2,19 @@ package com.example.bankcards.service;
 
 import com.example.bankcards.dto.OwnerRequestDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
+import com.example.bankcards.dto.OwnerUpdateDTO;
 import com.example.bankcards.entity.Owner;
 import com.example.bankcards.entity.Role;
 import com.example.bankcards.mapper.OwnerMapper;
 import com.example.bankcards.repository.OwnerRepository;
 import com.example.bankcards.security.OwnerDetails;
 import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,15 +23,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class OwnerServiceTests {
@@ -49,12 +52,13 @@ public class OwnerServiceTests {
     private OwnerService ownerService;
 
     Owner owner;
+    OwnerDetails ownerDetails;
 
     @BeforeEach
     void setUp() {
         ModelMapper modelMapper = new ModelMapper();
         this.ownerMapper = new OwnerMapper(modelMapper, passwordEncoder);
-        this.ownerService = new OwnerService(ownerRepository, ownerMapper);
+        this.ownerService = new OwnerService(ownerRepository, ownerMapper, passwordEncoder);
     }
 
     @Test
@@ -154,6 +158,142 @@ public class OwnerServiceTests {
         verify(ownerRepository).findById(1L);
     }
 
+    @Nested
+    class UpdateCurrentCustomerDataTests {
+        @BeforeEach
+        void setUp() {
+            SecurityContextHolder.setContext(securityContext);
+            when(securityContext.getAuthentication()).thenReturn(authentication);
+
+            owner = createSampleOwner();
+            ownerDetails = new OwnerDetails(owner);
+            when(authentication.getPrincipal()).thenReturn(ownerDetails);
+        }
+
+        @AfterEach
+        void tearDown() {
+            SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        void updateCurrentCustomerData_shouldReturnCorrectDTO() {
+            // given
+            owner.setPassword("encoded-secret");
+
+            OwnerUpdateDTO updateDTO = new OwnerUpdateDTO();
+            updateDTO.setPhone("+3-345-12-12");
+            updateDTO.setEmail("john@gmail.com");
+            updateDTO.setPassword("secret");
+
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+            when(passwordEncoder.encode("secret")).thenReturn("encoded-secret");
+
+            // when
+            when(ownerRepository.save(owner)).thenReturn(owner);
+
+            OwnerResponseDTO result = ownerService.updateCurrentCustomerData(updateDTO);
+
+            // then
+            assertEquals("+3-345-12-12", result.getPhone());
+            assertEquals("john@gmail.com", result.getEmail());
+            verify(ownerRepository).findById(1L);
+            verify(ownerRepository).save(owner);
+        }
+
+        @Test
+        void updateCurrentCustomerData_shouldThrowBadRequestException_whenAllFieldsAreNull() {
+            // given
+            Owner owner = new Owner();
+            owner.setId(1L);
+
+            OwnerUpdateDTO dto = new OwnerUpdateDTO();
+
+            // when
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+
+            // than
+            assertThrows(ResponseStatusException.class, () -> ownerService.updateCurrentCustomerData(dto));
+        }
+
+        @Test
+        void updateCurrentCustomerData_shouldThrowResponseStatusException_whenAllFieldsAreEmpty() {
+            Owner owner = createSampleOwner();
+            OwnerDetails ownerDetails = new OwnerDetails(owner);
+
+            // given
+            OwnerUpdateDTO dto = new OwnerUpdateDTO();
+            dto.setEmail("");
+            dto.setPassword("");
+            dto.setPhone("");
+
+            // when
+            when(securityContext.getAuthentication()).thenReturn(authentication);
+            when(authentication.getPrincipal()).thenReturn(ownerDetails);
+            when(ownerRepository.findById(owner.getId())).thenReturn(Optional.of(owner));
+
+            // then
+            assertThrows(ResponseStatusException.class, () -> ownerService.updateCurrentCustomerData(dto));
+            verify(ownerRepository, never()).save(any());
+        }
+
+        @Test
+        void updateCurrentCustomerData_shouldNotChangePassword_ifPasswordIsNull() {
+            Owner owner = new Owner();
+            owner.setId(1L);
+            owner.setEmail("old@gmail.com");
+            owner.setPhone("+100000000");
+            owner.setPassword("original");
+
+            OwnerDetails principal = new OwnerDetails(owner);
+            when(authentication.getPrincipal()).thenReturn(principal);
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+
+            OwnerUpdateDTO dto = new OwnerUpdateDTO();
+            dto.setEmail("new@gmail.com");
+            dto.setPhone("+2000000");
+            dto.setPassword(null);
+
+            ownerService.updateCurrentCustomerData(dto);
+
+            ArgumentCaptor<Owner> captor = ArgumentCaptor.forClass(Owner.class);
+            verify(ownerRepository).save(captor.capture());
+            Owner saved = captor.getValue();
+
+            assertEquals("original", saved.getPassword());
+            verify(passwordEncoder, never()).encode(anyString());
+
+            assertEquals("new@gmail.com", saved.getEmail());
+            assertEquals("+2000000", saved.getPhone());
+        }
+    }
+
+    @Test
+    void updateCurrentCustomerData_shouldEncodePassword_whenPasswordProvided() {
+        // given
+        Owner owner = new Owner();
+        owner.setId(1L);
+        owner.setPassword("old-hash");
+
+        OwnerDetails principal = new OwnerDetails(owner);
+        when(authentication.getPrincipal()).thenReturn(principal);
+        when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(passwordEncoder.encode("NewPass1!")).thenReturn("new-hash");
+
+        OwnerUpdateDTO dto = new OwnerUpdateDTO();
+        dto.setPassword("NewPass1!");
+
+        // when
+        ownerService.updateCurrentCustomerData(dto);
+
+        // then
+        ArgumentCaptor<Owner> captor = ArgumentCaptor.forClass(Owner.class);
+        verify(ownerRepository).save(captor.capture());
+        Owner saved = captor.getValue();
+
+        assertEquals("new-hash", saved.getPassword());
+        verify(passwordEncoder).encode("NewPass1!");
+    }
+
     private static OwnerRequestDTO createSampleDTO() {
         OwnerRequestDTO dto = new OwnerRequestDTO();
         dto.setFirstName("John");
@@ -177,7 +317,6 @@ public class OwnerServiceTests {
         return owner;
     }
 
-    // Возможно, на будущее
     private static OwnerResponseDTO createSampleResponseDTO() {
         OwnerResponseDTO response = new OwnerResponseDTO();
         response.setId(1L);

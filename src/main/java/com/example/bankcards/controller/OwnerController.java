@@ -6,7 +6,6 @@ import com.example.bankcards.security.JWTUtil;
 import com.example.bankcards.security.OwnerDetails;
 import com.example.bankcards.security.OwnerDetailsService;
 import com.example.bankcards.service.OwnerService;
-import com.example.bankcards.service.RefreshTokenService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -28,15 +27,13 @@ public class OwnerController {
     private final JWTUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final OwnerDetailsService ownerDetailsService;
-    private final RefreshTokenService refreshTokenService;
     private final Logger logger = LoggerFactory.getLogger(OwnerController.class);
     private final OwnerService ownerService;
 
-    public OwnerController(JWTUtil jwtUtil, AuthenticationManager authenticationManager, OwnerDetailsService ownerDetailsService, RefreshTokenService refreshTokenService, OwnerService ownerService) {
+    public OwnerController(JWTUtil jwtUtil, AuthenticationManager authenticationManager, OwnerDetailsService ownerDetailsService, OwnerService ownerService) {
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
         this.ownerDetailsService = ownerDetailsService;
-        this.refreshTokenService = refreshTokenService;
         this.ownerService = ownerService;
     }
 
@@ -72,11 +69,8 @@ public class OwnerController {
                     .orElse("ROLE_USER");
 
             String accessToken = jwtUtil.generateAccessToken(ownerDetails.getId(), ownerDetails.getUsername(), role);
-            String refreshToken = jwtUtil.generateRefreshToken(ownerDetails.getUsername());
 
-            refreshTokenService.saveRefreshToken(ownerDetails.getUsername(), refreshToken);
-
-            return ResponseEntity.ok(new JWTResponse(accessToken, refreshToken, ownerDetails.getId(), ownerDetails.getUsername()));
+            return ResponseEntity.ok(new JWTResponse(accessToken, ownerDetails.getId(), ownerDetails.getUsername()));
         } catch (BadCredentialsException e) {
             ErrorResponseDTO error = new ErrorResponseDTO();
             error.setStatus(401);
@@ -90,5 +84,20 @@ public class OwnerController {
     @GetMapping("/personal-account")
     public ResponseEntity<OwnerResponseDTO> getProfileInfo() {
         return ResponseEntity.ok(ownerService.getCurrentCustomerInfo());
+    }
+
+    @PatchMapping("/update-my-data")
+    public ResponseEntity<String> updateCustomerData(@RequestBody @Valid OwnerUpdateDTO dto, BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            logger.error("Binding result has errors: ");
+            bindingResult.getFieldErrors().forEach(fieldError ->
+                    logger.error(fieldError.getDefaultMessage()));
+            throw new ValidationException(bindingResult);
+        }
+
+        logger.debug("Middle of the method");
+        ownerService.updateCurrentCustomerData(dto);
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok("Profile updated. Please re-login to continue.");
     }
 }

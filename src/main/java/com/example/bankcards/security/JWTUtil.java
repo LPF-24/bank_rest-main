@@ -37,25 +37,4 @@ public class JWTUtil {
                 .build();
         return verifier.verify(token);
     }
-
-    // Доделать если останется время
-    public String generateRefreshToken(String email) {
-        Date expirationDate = Date.from(ZonedDateTime.now().plusDays(7).toInstant());
-
-        return JWT.create()
-                .withSubject("RefreshToken")
-                .withClaim("email", email)
-                .withIssuedAt(new Date())
-                .withIssuer("ADMIN")
-                .withExpiresAt(expirationDate)
-                .sign(Algorithm.HMAC256(secret));
-    }
-
-    public DecodedJWT validateRefreshToken(String token) {
-        return JWT.require(Algorithm.HMAC256(secret))
-                .withSubject("RefreshToken")
-                .withIssuer("ADMIN")
-                .build()
-                .verify(token);
-    }
 }

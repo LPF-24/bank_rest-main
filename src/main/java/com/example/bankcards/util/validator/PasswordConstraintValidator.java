@@ -14,6 +14,10 @@ public class PasswordConstraintValidator implements ConstraintValidator<ValidPas
 
     @Override
     public boolean isValid(String password, ConstraintValidatorContext context) {
+        if (password == null || password.isBlank()) {
+            return true;
+        }
+
         logger.error("Password annotation triggered for: {}", password);
 
         PasswordValidator validator = new PasswordValidator(List.of(

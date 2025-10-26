@@ -58,7 +58,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers("/owner/registration", "/owner/login").permitAll()
-                        .requestMatchers("/owner/personal-account")
+                        .requestMatchers("/owner/personal-account", "/owner/update-my-data")
                         .hasAnyAuthority("USER", "ADMIN")
                         .anyRequest().authenticated()
                 )
