@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -76,8 +77,7 @@ public class AdminControllerTests {
                     .andExpect(jsonPath("$.path").value("/admin/promote"));
         }
 
-        // нужна более глубокая работа - добавление кастомного обработчика или чего-то такого
-        /*@Test
+        @Test
         void promote_shouldFailValidation_whenRoleIsAdmin() throws Exception {
             Owner savedOwner = createSampleOwner("John", "Smith", "john23@gmail.com", Role.ADMIN);
             Long userId = savedOwner.getId();
@@ -88,11 +88,11 @@ public class AdminControllerTests {
             mockMvc.perform(patch("/admin/promote")
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"code\": \"400000\"}"))
+                            .content("{\"code\": \"work2025admin\"}"))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.status").value(403))
                     .andExpect(jsonPath("$.path").value("/admin/promote"));
-        }*/
+        }
 
         @Test
         void promote_shouldFail_whenUserNotFound() throws Exception {
@@ -121,6 +121,79 @@ public class AdminControllerTests {
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.message").value("error: Customer with this id 9999 can't be found"))
                     .andExpect(jsonPath("$.path").value("/admin/promote"));
+        }
+    }
+
+    @Nested
+    class methodGetAllCustomersTests {
+        @AfterEach
+        void clearDatabase() {
+            ownerRepository.deleteAll();
+        }
+
+        @Test
+        void getAllCustomers_shouldReceiveResponseDTOs() throws Exception {
+            Owner savedOwner = createSampleOwner("John", "Smith", "john23@gmail.com", Role.ADMIN);
+            Long userId = savedOwner.getId();
+            String email = savedOwner.getEmail();
+
+            String token = jwtUtil.generateAccessToken(userId, email, Role.ADMIN.name());
+            createSampleOwner("Daniel", "Parker", "dan345@gmail.com", Role.USER);
+
+            mockMvc.perform(get("/admin/all-customers")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(1))
+                    .andExpect(jsonPath("$[0].lastName").value("Parker"))
+                    .andExpect(jsonPath("$[0].email").value("dan345@gmail.com"));
+        }
+
+        @Test
+        void getAllCustomers_shouldReturnEmptyList_whenNoUsersExist() throws Exception {
+            Owner savedOwner = createSampleOwner("John", "Smith", "john23@gmail.com", Role.ADMIN);
+            Long userId = savedOwner.getId();
+            String email = savedOwner.getEmail();
+
+            String token = jwtUtil.generateAccessToken(userId, email, Role.ADMIN.name());
+
+            mockMvc.perform(get("/admin/all-customers")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+        }
+
+        @Test
+        void getAllCustomers_shouldFailValidation_whenCodeIsEmpty() throws Exception {
+            mockMvc.perform(get("/admin/all-customers"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.status").value(401))
+                    .andExpect(jsonPath("$.message").value("Unauthorized: missing or invalid token"))
+                    .andExpect(jsonPath("$.path").value("/admin/all-customers"));
+        }
+
+        @Test
+        void getAllCustomers_shouldFailMethod_whenRoleIsUser() throws Exception {
+            Owner savedOwner = createSampleOwner("John", "Smith", "john23@gmail.com", Role.USER);
+            Long userId = savedOwner.getId();
+            String email = savedOwner.getEmail();
+
+            String token = jwtUtil.generateAccessToken(userId, email, Role.USER.name());
+
+            mockMvc.perform(get("/admin/all-customers")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status").value(403))
+                    .andExpect(jsonPath("$.path").value("/admin/all-customers"));
+        }
+
+        @Test
+        void getAllCustomers_shouldReturnUnauthorized_whenTokenIsInvalid() throws Exception {
+            String token = "Bearer invalid.token.value";
+
+            mockMvc.perform(get("/admin/all-customers")
+                            .header(HttpHeaders.AUTHORIZATION, token))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.status").value(401));
         }
     }
 

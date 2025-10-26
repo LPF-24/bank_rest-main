@@ -1,9 +1,12 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.entity.Owner;
 import com.example.bankcards.entity.Role;
+import com.example.bankcards.mapper.OwnerMapper;
 import com.example.bankcards.repository.OwnerRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,12 +15,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AdminServiceTests {
@@ -28,6 +31,9 @@ class AdminServiceTests {
 
     @Mock
     private OwnerRepository ownerRepository;
+
+    @Mock
+    private OwnerMapper ownerMapper;
 
     @InjectMocks
     private AdminService adminService;
@@ -56,6 +62,46 @@ class AdminServiceTests {
         }
     }
 
+    @Nested
+    class FindAllUsersTests {
+        @BeforeEach
+        void setUp() {
+            adminService = new AdminService(ownerRepository, ownerMapper);
+        }
+
+        @Test
+        void shouldGetAllUsersInfo() {
+            Owner owner = createSampleOwner();
+            OwnerResponseDTO responseDTO = createSampleResponseDTO();
+
+            when(ownerRepository.findAll()).thenReturn(List.of(owner));
+            when(ownerMapper.toResponse(owner)).thenReturn(responseDTO);
+
+            List<OwnerResponseDTO> result = adminService.findAllUsers();
+
+            assertEquals(responseDTO.getEmail(), result.getFirst().getEmail());
+            assertEquals(responseDTO.getId(), result.getFirst().getId());
+            assertEquals(EMAIL, result.getFirst().getEmail());
+            assertEquals(Role.USER, owner.getRole());
+            assertEquals(PERSON_ID, result.getFirst().getId());
+            assertEquals(1, result.size());
+            assertEquals(FIRST_NAME, result.getFirst().getFirstName());
+
+            verify(ownerRepository).findAll();
+        }
+
+        @Test
+        void shouldReturnEmptyList_whenNoUsers() {
+            when(ownerRepository.findAll()).thenReturn(List.of());
+
+            List<OwnerResponseDTO> result = adminService.findAllUsers();
+
+            assertEquals(0, result.size());
+
+            verify(ownerRepository).findAll();
+        }
+    }
+
     private static Owner createSampleOwner() {
         Owner owner = new Owner();
         owner.setId(PERSON_ID);
@@ -66,5 +112,15 @@ class AdminServiceTests {
         owner.setPassword("secret");
         owner.setPhone("+3-345-12-12");
         return owner;
+    }
+
+    private static OwnerResponseDTO createSampleResponseDTO() {
+        OwnerResponseDTO response = new OwnerResponseDTO();
+        response.setId(PERSON_ID);
+        response.setFirstName(FIRST_NAME);
+        response.setLastName(LAST_NAME);
+        response.setEmail(EMAIL);
+        response.setRole(Role.USER);
+        return response;
     }
 }

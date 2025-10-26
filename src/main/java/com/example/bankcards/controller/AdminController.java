@@ -1,6 +1,7 @@
 package com.example.bankcards.controller;
 
 import com.example.bankcards.dto.CodeRequestDTO;
+import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.exception.ValidationException;
 import com.example.bankcards.security.OwnerDetails;
 import com.example.bankcards.service.AdminService;
@@ -8,13 +9,13 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/admin")
@@ -43,5 +44,11 @@ public class AdminController {
         adminService.promotePerson(personDetails.getId());
         logger.info("Promotion was successful");
         return ResponseEntity.ok("You have been successfully promoted to administrator. Please log in again, colleague.");
+    }
+
+    @GetMapping("/all-customers")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<List<OwnerResponseDTO>> getAllCustomers() {
+        return ResponseEntity.ok(adminService.findAllUsers());
     }
 }
