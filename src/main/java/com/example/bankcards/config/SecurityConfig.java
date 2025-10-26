@@ -20,7 +20,7 @@ import org.springframework.validation.beanvalidation.MethodValidationPostProcess
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity(proxyTargetClass = true)
 public class SecurityConfig {
     private final OwnerDetailsService ownerDetailsService;
     private final JWTFilter jwtFilter;
