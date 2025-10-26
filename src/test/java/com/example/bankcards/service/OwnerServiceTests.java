@@ -4,9 +4,10 @@ import com.example.bankcards.dto.OwnerRequestDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.entity.Owner;
 import com.example.bankcards.entity.Role;
-import com.example.bankcards.exception.ValidationException;
 import com.example.bankcards.mapper.OwnerMapper;
 import com.example.bankcards.repository.OwnerRepository;
+import com.example.bankcards.security.OwnerDetails;
+import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
@@ -115,6 +117,41 @@ public class OwnerServiceTests {
         OwnerResponseDTO result = ownerService.savePerson(dto);
 
         assertEquals(Role.USER, result.getRole());
+    }
+
+    @Test
+    void getCurrentCustomerInfo_shouldReturnCorrectDTO() {
+        // given
+        Owner owner = createSampleOwner();
+        OwnerDetails ownerDetails = new OwnerDetails(owner);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getPrincipal()).thenReturn(ownerDetails);
+
+        when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+
+        // when
+        OwnerResponseDTO result = ownerService.getCurrentCustomerInfo();
+
+        // than
+        assertEquals("John", result.getFirstName());
+        verify(ownerRepository).findById(1L);
+    }
+
+    @Test
+    void getCurrentCustomerInfo_shouldThrowException_whenCustomerNotFound() {
+        Owner owner = createSampleOwner();
+        OwnerDetails ownerDetails = new OwnerDetails(owner);
+        SecurityContextHolder.setContext(securityContext);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getPrincipal()).thenReturn(ownerDetails);
+
+        when(ownerRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(EntityNotFoundException.class, () -> ownerService.getCurrentCustomerInfo());
+        verify(ownerRepository).findById(1L);
     }
 
     private static OwnerRequestDTO createSampleDTO() {

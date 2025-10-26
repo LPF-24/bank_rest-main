@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface OwnerRepository extends JpaRepository<Owner, Integer> {
     Optional<Owner> findByEmail(String email);
+
+    Optional<Owner> findById(Long id);
 }
