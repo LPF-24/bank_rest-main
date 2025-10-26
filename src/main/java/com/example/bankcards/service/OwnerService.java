@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Objects;
 import java.util.stream.Stream;
 
 @Service
@@ -61,13 +60,13 @@ public class OwnerService {
         Owner ownerToUpdate = ownerRepository.findById(ownerDetails.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Customer with ID " + ownerDetails.getId() + " wasn't found!"));
 
-        boolean allFieldsNull = Stream.of(
+        boolean allFieldsEmpty = Stream.of(
                 dto.getPhone(),
                 dto.getPassword(),
                 dto.getEmail()
-        ).allMatch(Objects::isNull);
+        ).allMatch(value -> value == null || value.isBlank());
 
-        if (allFieldsNull) {
+        if (allFieldsEmpty) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nothing to update");
         }
 

@@ -245,8 +245,10 @@ public class OwnerServiceTests {
             owner.setPassword("original");
 
             OwnerDetails principal = new OwnerDetails(owner);
+
             when(authentication.getPrincipal()).thenReturn(principal);
             when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+            when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             OwnerUpdateDTO dto = new OwnerUpdateDTO();
             dto.setEmail("new@gmail.com");
@@ -265,33 +267,37 @@ public class OwnerServiceTests {
             assertEquals("new@gmail.com", saved.getEmail());
             assertEquals("+2000000", saved.getPhone());
         }
-    }
 
-    @Test
-    void updateCurrentCustomerData_shouldEncodePassword_whenPasswordProvided() {
-        // given
-        Owner owner = new Owner();
-        owner.setId(1L);
-        owner.setPassword("old-hash");
+        @Test
+        void updateCurrentCustomerData_shouldEncodePassword_whenPasswordProvided() {
+            // given
+            Owner owner = new Owner();
+            owner.setId(1L);
+            owner.setPassword("old-hash");
 
-        OwnerDetails principal = new OwnerDetails(owner);
-        when(authentication.getPrincipal()).thenReturn(principal);
-        when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
-        when(passwordEncoder.encode("NewPass1!")).thenReturn("new-hash");
+            OwnerDetails principal = new OwnerDetails(owner);
 
-        OwnerUpdateDTO dto = new OwnerUpdateDTO();
-        dto.setPassword("NewPass1!");
+            when(authentication.getPrincipal()).thenReturn(principal);
 
-        // when
-        ownerService.updateCurrentCustomerData(dto);
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+            when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // then
-        ArgumentCaptor<Owner> captor = ArgumentCaptor.forClass(Owner.class);
-        verify(ownerRepository).save(captor.capture());
-        Owner saved = captor.getValue();
+            when(passwordEncoder.encode("NewPass1!")).thenReturn("new-hash");
 
-        assertEquals("new-hash", saved.getPassword());
-        verify(passwordEncoder).encode("NewPass1!");
+            OwnerUpdateDTO dto = new OwnerUpdateDTO();
+            dto.setPassword("NewPass1!");
+
+            // when
+            ownerService.updateCurrentCustomerData(dto);
+
+            // then
+            ArgumentCaptor<Owner> captor = ArgumentCaptor.forClass(Owner.class);
+            verify(ownerRepository).save(captor.capture());
+            Owner saved = captor.getValue();
+
+            assertEquals("new-hash", saved.getPassword());
+            verify(passwordEncoder).encode("NewPass1!");
+        }
     }
 
     private static OwnerRequestDTO createSampleDTO() {
@@ -315,17 +321,5 @@ public class OwnerServiceTests {
         owner.setPassword("secret");
         owner.setPhone("+3-345-12-12");
         return owner;
-    }
-
-    private static OwnerResponseDTO createSampleResponseDTO() {
-        OwnerResponseDTO response = new OwnerResponseDTO();
-        response.setId(1L);
-        response.setFirstName("John");
-        response.setLastName("Smith");
-        response.setDateOfBirth(LocalDate.of(2002, 3, 14));
-        response.setEmail("john@gmail.com");
-        response.setRole(Role.USER);
-        response.setPhone("+3-345-12-12");
-        return response;
     }
 }

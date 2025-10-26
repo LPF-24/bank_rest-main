@@ -60,6 +60,7 @@ public class SecurityConfig {
                         .requestMatchers("/owner/registration", "/owner/login").permitAll()
                         .requestMatchers("/owner/personal-account", "/owner/update-my-data")
                         .hasAnyAuthority("USER", "ADMIN")
+                        .requestMatchers("/admin/promote").hasAuthority("USER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

@@ -8,5 +8,8 @@ spring:
     password:
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: create-drop
     open-in-view: false
+  sql:
+    init:
+      mode: never
