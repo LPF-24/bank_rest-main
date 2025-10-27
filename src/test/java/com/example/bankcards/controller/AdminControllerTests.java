@@ -21,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -255,6 +257,80 @@ public class AdminControllerTests {
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.path").value("/admin/block-customer/" + missingId));
+        }
+    }
+
+    @Nested
+    class methodUnblockCustomerTests {
+        @AfterEach
+        void cleanup() { ownerRepository.deleteAll(); }
+
+        private Owner createOwner(String email, Role role, boolean locked) {
+            Owner o = new Owner();
+            o.setFirstName("User");
+            o.setLastName("Test");
+            o.setEmail(email);
+            o.setPassword("secret");
+            o.setPhone("+1000000");
+            o.setDateOfBirth(LocalDate.of(2000,1,1));
+            o.setRole(role);
+            o.setLocked(locked);
+            return ownerRepository.save(o);
+        }
+
+        @Test
+        void unblockCustomer_shouldReturn200_forAdmin() throws Exception {
+            Owner admin = createOwner("admin@example.com", Role.ADMIN, false);
+            Owner target = createOwner("locked@example.com", Role.USER, true);
+
+            String adminToken = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), Role.ADMIN.name());
+
+            mockMvc.perform(patch("/admin/unblock-customer/{id}", target.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("Customer's account with id " + target.getId() + " is unlocked."));
+
+            assertFalse(ownerRepository.findById(target.getId()).orElseThrow().isLocked());
+        }
+
+        @Test
+        void unblockCustomer_shouldReturn403_forUser() throws Exception {
+            Owner user = createOwner("user@example.com", Role.USER, false);
+            Owner target = createOwner("locked2@example.com", Role.USER, true);
+
+            String userToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), Role.USER.name());
+
+            mockMvc.perform(patch("/admin/unblock-customer/{id}", target.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status").value(403))
+                    .andExpect(jsonPath("$.path").value("/admin/unblock-customer/" + target.getId()));
+        }
+
+        @Test
+        void unblockCustomer_shouldReturn401_whenNoToken() throws Exception {
+            mockMvc.perform(patch("/admin/unblock-customer/{id}", 999L)
+                            .with(csrf()))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.status").value(401))
+                    .andExpect(jsonPath("$.path").value("/admin/unblock-customer/999"));
+        }
+
+        @Test
+        void unblockCustomer_shouldReturn404_whenNotFound() throws Exception {
+            Owner admin = createOwner("admin2@example.com", Role.ADMIN, false);
+            String adminToken = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), Role.ADMIN.name());
+
+            long missingId = 777L;
+
+            mockMvc.perform(patch("/admin/unblock-customer/{id}", missingId)
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.path").value("/admin/unblock-customer/" + missingId));
         }
     }
 

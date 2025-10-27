@@ -58,4 +58,10 @@ public class AdminController {
         adminService.blockCustomer(ownerId);
         return ResponseEntity.ok("Customer's account with id " + ownerId + " is locked.");
     }
+
+    @PatchMapping("/unblock-customer/{id}")
+    public ResponseEntity<String> unblockCustomer(@PathVariable("id") Long ownerId) {
+        adminService.unlockCustomer(ownerId);
+        return ResponseEntity.ok("Customer's account with id " + ownerId + " is unlocked.");
+    }
 }

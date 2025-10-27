@@ -53,4 +53,16 @@ public class AdminService {
 
         ownerRepository.save(ownerToLock);
     }
+
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @Transactional
+    public void unlockCustomer(Long ownerId) {
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Owner with id " + ownerId + " not found"));
+        if (owner.isLocked()) {
+            owner.setLocked(false);
+            ownerRepository.save(owner);
+        }
+        // идемпотентно: если уже разблокирован — просто ничего не делаем
+    }
 }
