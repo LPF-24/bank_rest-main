@@ -44,6 +44,9 @@ public class Owner {
     @JsonIgnore
     private String password;
 
+    @Column(name = "is_locked", nullable = false)
+    private boolean isLocked;
+
     @OneToMany(mappedBy = "owner", fetch = FetchType.LAZY)
     @JsonIgnore
     private List<Card> cards;
@@ -129,6 +132,14 @@ public class Owner {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public boolean isLocked() {
+        return isLocked;
+    }
+
+    public void setLocked(boolean locked) {
+        isLocked = locked;
     }
 
     @Override

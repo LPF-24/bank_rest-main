@@ -39,7 +39,7 @@ public class OwnerDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return UserDetails.super.isAccountNonLocked();
+        return !owner.isLocked();
     }
 
     @Override

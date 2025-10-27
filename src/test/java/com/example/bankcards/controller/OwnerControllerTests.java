@@ -102,6 +102,37 @@ public class OwnerControllerTests {
                     .andExpect(jsonPath("$.message").value("Invalid email or password"))
                     .andExpect(jsonPath("$.path").value("/owner/login"));
         }
+
+        @Test
+        void performAuthentication_shouldReturn423_whenAccountLocked() throws Exception {
+            Owner locked = new Owner();
+            locked.setFirstName("Kate");
+            locked.setLastName("Miller");
+            locked.setDateOfBirth(java.time.LocalDate.of(2001, 5, 20));
+            locked.setEmail("locked@example.com");
+            locked.setPassword("secret");
+            locked.setPhone("+3-345-12-12");
+            locked.setRole(Role.USER);
+            locked.setLocked(true);
+            ownerRepository.save(locked);
+
+            when(authenticationManager.authenticate(any(Authentication.class)))
+                    .thenThrow(new org.springframework.security.authentication.LockedException("Account locked"));
+
+            mockMvc.perform(post("/owner/login")
+                            .with(csrf())
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content("""
+                                {
+                                  "email": "locked@example.com",
+                                  "password": "any"
+                                }
+                            """))
+                    .andExpect(status().isLocked())
+                    .andExpect(jsonPath("$.status").value(423))
+                    .andExpect(jsonPath("$.message").value("Your account is deactivated. Would you like to restore it?"))
+                    .andExpect(jsonPath("$.path").value("/owner/login"));
+        }
     }
 
     @Nested

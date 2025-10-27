@@ -67,7 +67,7 @@ public class SecurityConfig {
                         .requestMatchers("/owner/personal-account", "/owner/update-my-data")
                         .hasAnyAuthority("USER", "ADMIN")
                         .requestMatchers("/admin/promote").hasAuthority("USER")
-                        .requestMatchers("/admin/all-customers").hasAuthority("ADMIN")
+                        .requestMatchers("/admin/all-customers", "/admin/block-customer/{id}").hasAuthority("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

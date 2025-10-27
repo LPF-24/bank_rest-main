@@ -18,8 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,6 +98,32 @@ class AdminServiceTests {
             assertEquals(0, result.size());
 
             verify(ownerRepository).findAll();
+        }
+    }
+
+    @Nested
+    class BlockCustomerTests {
+        @Test
+        void blockCustomer_shouldSetLockedTrue_andSave() {
+            Owner o = new Owner();
+            o.setId(1L);
+            o.setLocked(false);
+
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(o));
+            when(ownerRepository.save(any(Owner.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            adminService.blockCustomer(1L);
+
+            assertTrue(o.isLocked());
+            verify(ownerRepository).save(o);
+        }
+
+        @Test
+        void blockCustomer_shouldThrow_ifOwnerNotFound() {
+            when(ownerRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(EntityNotFoundException.class, () -> adminService.blockCustomer(99L));
+            verify(ownerRepository, never()).save(any());
         }
     }
 

@@ -75,7 +75,12 @@ public class OwnerService {
         }
 
         if (dto.getPhone() != null) ownerToUpdate.setPhone(dto.getPhone());
-        if (dto.getEmail() != null) ownerToUpdate.setEmail(dto.getEmail());
+        if (StringUtils.hasText(dto.getEmail())) {
+            if (ownerRepository.existsByEmailAndIdNot(dto.getEmail(), ownerToUpdate.getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This email is already taken!");
+            }
+            ownerToUpdate.setEmail(dto.getEmail());
+        }
 
         return ownerMapper.toResponse(ownerRepository.save(ownerToUpdate));
     }

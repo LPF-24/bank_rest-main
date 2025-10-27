@@ -160,3 +160,17 @@ databaseChangeLog:
             tableName: owner
             columnName: email
             newDataType: VARCHAR(100)
+
+  - changeSet:
+      id: 011-owner-add-is_locked
+      author: LPF-24
+      changes:
+        - addColumn:
+            tableName: owner
+            columns:
+              - column:
+                  name: is_locked
+                  type: BOOLEAN
+                  defaultValueBoolean: false   
+                  constraints:
+                    nullable: false

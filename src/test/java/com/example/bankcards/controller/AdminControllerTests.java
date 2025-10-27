@@ -197,6 +197,67 @@ public class AdminControllerTests {
         }
     }
 
+    @Nested
+    class methodBlockCustomerTests {
+
+        @AfterEach
+        void cleanup() {
+            ownerRepository.deleteAll();
+        }
+
+        @Test
+        void blockCustomer_shouldReturn200_forAdmin() throws Exception {
+            Owner admin = createSampleOwner("Admin", "Boss", "admin@example.com", Role.ADMIN);
+            Owner target = createSampleOwner("John", "Smith", "john23@gmail.com", Role.USER);
+
+            String adminToken = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), Role.ADMIN.name());
+
+            mockMvc.perform(patch("/admin/block-customer/{id}", target.getId())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("Customer's account with id " + target.getId() + " is locked."));
+        }
+
+        @Test
+        void blockCustomer_shouldReturn403_forUser() throws Exception {
+            Owner user = createSampleOwner("User", "U", "user@example.com", Role.USER);
+            Owner target = createSampleOwner("Daniel", "Parker", "dan345@gmail.com", Role.USER);
+
+            String userToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), Role.USER.name());
+
+            mockMvc.perform(patch("/admin/block-customer/{id}", target.getId())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status").value(403))
+                    .andExpect(jsonPath("$.path").value("/admin/block-customer/" + target.getId()));
+        }
+
+        @Test
+        void blockCustomer_shouldReturn401_whenNoToken() throws Exception {
+            mockMvc.perform(patch("/admin/block-customer/{id}", 123L))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.status").value(401))
+                    .andExpect(jsonPath("$.path").value("/admin/block-customer/123"));
+        }
+
+        @Test
+        void blockCustomer_shouldReturn404_whenTargetNotFound() throws Exception {
+            Owner admin = createSampleOwner("Admin", "Boss", "admin@example.com", Role.ADMIN);
+            String adminToken = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), Role.ADMIN.name());
+
+            long missingId = 999_999L;
+
+            mockMvc.perform(patch("/admin/block-customer/{id}", missingId)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.status").value(404))
+                    .andExpect(jsonPath("$.path").value("/admin/block-customer/" + missingId));
+        }
+    }
+
     private Owner createSampleOwner(String firstName, String lastName, String email, Role role) {
         Owner owner = new Owner();
         owner.setFirstName(firstName);
