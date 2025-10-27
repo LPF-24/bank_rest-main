@@ -19,10 +19,9 @@ public class Card {
     @JoinColumn(name = "owner_id", nullable = false)
     private Owner owner;
 
-    @Column(name = "pan_encrypted", nullable = false, columnDefinition = "BYTEA")
-    @Lob
-    @JsonIgnore
     @Convert(converter = PanAttributeConverter.class)
+    @Column(name = "pan_encrypted", nullable = false)
+    @JsonIgnore
     private String pan;
 
     @Column(name = "pan_last4", nullable = false, length = 4)
@@ -38,7 +37,7 @@ public class Card {
     private short expiryYear;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(nullable = false, length = 16)
     private CardStatus status;
 
     @Column(nullable = false, precision = 19, scale = 2)
@@ -63,8 +62,6 @@ public class Card {
 
     public void setPan(String pan) {
         this.pan = pan;
-        this.panLast4 = pan.substring(pan.length() - 4);
-        this.bin = pan.substring(0, 6);
     }
 
     public String getPanLast4() {

@@ -174,3 +174,12 @@ databaseChangeLog:
                   defaultValueBoolean: false   
                   constraints:
                     nullable: false
+
+  - changeSet:
+      id: 012-card-status-to-varchar
+      author: LPF-24
+      changes:
+        - modifyDataType:
+            tableName: card
+            columnName: status
+            newDataType: VARCHAR(16)

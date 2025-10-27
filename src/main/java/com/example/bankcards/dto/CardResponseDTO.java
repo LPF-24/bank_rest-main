@@ -6,6 +6,12 @@ import com.example.bankcards.entity.Currency;
 import java.math.BigDecimal;
 
 public class CardResponseDTO {
+    private Long id;
+
+    private Long ownerId;
+
+    private String maskedPan;
+
     private String panLast4;
 
     private short expiryMonth;
@@ -67,5 +73,29 @@ public class CardResponseDTO {
 
     public void setCurrency(Currency currency) {
         this.currency = currency;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public String getMaskedPan() {
+        return maskedPan;
+    }
+
+    public void setMaskedPan(String maskedPan) {
+        this.maskedPan = maskedPan;
     }
 }
