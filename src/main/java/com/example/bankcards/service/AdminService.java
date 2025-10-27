@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.bankcards.dto.OwnerAdminUpdateDTO;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -64,5 +65,35 @@ public class AdminService {
             ownerRepository.save(owner);
         }
         // идемпотентно: если уже разблокирован — просто ничего не делаем
+    }
+
+    @Transactional
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public OwnerResponseDTO updateCustomerDataByAdmin(Long ownerId, OwnerAdminUpdateDTO dto) {
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Owner with ID " + ownerId + " wasn't found!"));
+
+        boolean allFieldsEmpty = Stream.of(
+                dto.getFirstName(),
+                dto.getLastName(),
+                dto.getDateOfBirth()
+        ).allMatch(value -> value == null || (value instanceof String && ((String) value).isBlank()));
+
+        if (allFieldsEmpty) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nothing to update");
+        }
+
+        if (StringUtils.hasText(dto.getFirstName())) {
+            owner.setFirstName(dto.getFirstName());
+        }
+        if (StringUtils.hasText(dto.getLastName())) {
+            owner.setLastName(dto.getLastName());
+        }
+        if (dto.getDateOfBirth() != null) {
+            owner.setDateOfBirth(dto.getDateOfBirth());
+        }
+
+        Owner updated = ownerRepository.save(owner);
+        return ownerMapper.toResponse(updated);
     }
 }

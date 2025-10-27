@@ -265,18 +265,7 @@ public class AdminControllerTests {
         @AfterEach
         void cleanup() { ownerRepository.deleteAll(); }
 
-        private Owner createOwner(String email, Role role, boolean locked) {
-            Owner o = new Owner();
-            o.setFirstName("User");
-            o.setLastName("Test");
-            o.setEmail(email);
-            o.setPassword("secret");
-            o.setPhone("+1000000");
-            o.setDateOfBirth(LocalDate.of(2000,1,1));
-            o.setRole(role);
-            o.setLocked(locked);
-            return ownerRepository.save(o);
-        }
+
 
         @Test
         void unblockCustomer_shouldReturn200_forAdmin() throws Exception {
@@ -334,6 +323,69 @@ public class AdminControllerTests {
         }
     }
 
+    @Nested
+    class UpdateCustomerAsAdminIntegrationTests {
+
+        @Test
+        void shouldUpdateCustomer_whenAdmin() throws Exception {
+            Owner admin = createOwner("admin@example.com", Role.ADMIN, false);
+            Owner target = createOwner("john@gmail.com", Role.USER, false);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(patch("/admin/update-customer/" + target.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                {
+                                  "firstName": "Updated",
+                                  "lastName": "Customer",
+                                  "dateOfBirth": "1999-05-10"
+                                }
+                                """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.firstName").value("Updated"))
+                    .andExpect(jsonPath("$.lastName").value("Customer"))
+                    .andExpect(jsonPath("$.dateOfBirth").value("1999-05-10"));
+        }
+
+        @Test
+        void shouldReturnForbidden_whenUserTriesToUpdate() throws Exception {
+            Owner user = createOwner("user@example.com", Role.USER, false);
+            Owner target = createOwner("jack@gmail.com", Role.USER, false);
+
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(patch("/admin/update-customer/" + target.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                { "firstName": "Hack" }
+                                """))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void shouldReturnBadRequest_whenFieldsEmpty() throws Exception {
+            Owner admin = createOwner("admin@example.com", Role.ADMIN, false);
+            Owner target = createOwner("bob@gmail.com", Role.USER, false);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(patch("/admin/update-customer/" + target.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Nothing to update"))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.path").value("/admin/update-customer/" + target.getId()));
+        }
+    }
+
     private Owner createSampleOwner(String firstName, String lastName, String email, Role role) {
         Owner owner = new Owner();
         owner.setFirstName(firstName);
@@ -344,5 +396,18 @@ public class AdminControllerTests {
         owner.setPhone("+3-345-12-12");
         owner.setRole(role);
         return ownerRepository.save(owner);
+    }
+
+    private Owner createOwner(String email, Role role, boolean locked) {
+        Owner o = new Owner();
+        o.setFirstName("User");
+        o.setLastName("Test");
+        o.setEmail(email);
+        o.setPassword("secret");
+        o.setPhone("+1000000");
+        o.setDateOfBirth(LocalDate.of(2000,1,1));
+        o.setRole(role);
+        o.setLocked(locked);
+        return ownerRepository.save(o);
     }
 }

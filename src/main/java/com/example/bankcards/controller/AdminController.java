@@ -1,6 +1,7 @@
 package com.example.bankcards.controller;
 
 import com.example.bankcards.dto.CodeRequestDTO;
+import com.example.bankcards.dto.OwnerAdminUpdateDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.exception.ValidationException;
 import com.example.bankcards.security.OwnerDetails;
@@ -63,5 +64,19 @@ public class AdminController {
     public ResponseEntity<String> unblockCustomer(@PathVariable("id") Long ownerId) {
         adminService.unlockCustomer(ownerId);
         return ResponseEntity.ok("Customer's account with id " + ownerId + " is unlocked.");
+    }
+
+    @PatchMapping("/update-customer/{id}")
+    public ResponseEntity<OwnerResponseDTO> updateCustomerDataAsAdmin(
+            @PathVariable("id") Long ownerId,
+            @RequestBody @Valid OwnerAdminUpdateDTO dto,
+            BindingResult bindingResult) {
+
+        if (bindingResult.hasErrors()) {
+            throw new ValidationException(bindingResult);
+        }
+
+        OwnerResponseDTO response = adminService.updateCustomerDataByAdmin(ownerId, dto);
+        return ResponseEntity.ok(response);
     }
 }

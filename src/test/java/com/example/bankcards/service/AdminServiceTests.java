@@ -1,5 +1,6 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.OwnerAdminUpdateDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.entity.Owner;
 import com.example.bankcards.entity.Role;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -162,6 +164,66 @@ class AdminServiceTests {
         void unlockCustomer_shouldThrow_whenOwnerNotFound() {
             when(ownerRepository.findById(42L)).thenReturn(Optional.empty());
             assertThrows(EntityNotFoundException.class, () -> adminService.unlockCustomer(42L));
+            verify(ownerRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    class UpdateCustomerDataByAdminTests {
+
+        @Test
+        void shouldUpdateCustomerFields() {
+            Owner owner = new Owner();
+            owner.setId(1L);
+            owner.setFirstName("Old");
+            owner.setLastName("Name");
+            owner.setDateOfBirth(LocalDate.of(1990, 1, 1));
+
+            OwnerResponseDTO mappedResponse = new OwnerResponseDTO();
+            mappedResponse.setId(1L);
+            mappedResponse.setFirstName("NewName");
+            mappedResponse.setLastName("UpdatedLast");
+            mappedResponse.setDateOfBirth(LocalDate.of(1995, 2, 15));
+
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+            when(ownerRepository.save(any())).thenReturn(owner);
+            when(ownerMapper.toResponse(owner)).thenReturn(mappedResponse);
+
+            OwnerAdminUpdateDTO dto = new OwnerAdminUpdateDTO();
+            dto.setFirstName("NewName");
+            dto.setLastName("UpdatedLast");
+            dto.setDateOfBirth(LocalDate.of(1995, 2, 15));
+
+            OwnerResponseDTO response = adminService.updateCustomerDataByAdmin(1L, dto);
+
+            assertNotNull(response);
+            assertEquals("NewName", response.getFirstName());
+            assertEquals("UpdatedLast", response.getLastName());
+            assertEquals(LocalDate.of(1995, 2, 15), response.getDateOfBirth());
+
+            verify(ownerRepository).save(owner);
+        }
+
+        @Test
+        void shouldThrowException_whenCustomerNotFound() {
+            when(ownerRepository.findById(99L)).thenReturn(Optional.empty());
+            OwnerAdminUpdateDTO dto = new OwnerAdminUpdateDTO();
+            dto.setFirstName("Name");
+
+            assertThrows(EntityNotFoundException.class,
+                    () -> adminService.updateCustomerDataByAdmin(99L, dto));
+        }
+
+        @Test
+        void shouldThrowBadRequest_whenNothingToUpdate() {
+            Owner owner = new Owner();
+            owner.setId(1L);
+            when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+
+            OwnerAdminUpdateDTO dto = new OwnerAdminUpdateDTO(); // все поля null
+
+            assertThrows(ResponseStatusException.class,
+                    () -> adminService.updateCustomerDataByAdmin(1L, dto));
             verify(ownerRepository, never()).save(any());
         }
     }
