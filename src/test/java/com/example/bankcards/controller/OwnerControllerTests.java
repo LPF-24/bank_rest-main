@@ -148,7 +148,25 @@ public class OwnerControllerTests {
                             containsString("password:"))));
         }
 
+        @Test
+        void register_shouldThrowsException_whenUserWithThisEmailIsAlreadyRegistered() throws Exception {
+            ownerRepository.save(createSampleOwner("John", "Smith", "john23@gmail.com", Role.USER));
 
+            mockMvc.perform(post("/owner/registration")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "firstName": "John",
+                                      "lastName": "Smith",
+                                      "dateOfBirth": "2000-12-12",
+                                      "email": "john23@gmail.com",
+                                      "phone": "+33451212",
+                                      "password": "Test234!"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message", containsString("This email is already taken!")));
+        }
     }
 
     private static Owner createSampleOwner(String firstName, String lastName, String email, Role role) {

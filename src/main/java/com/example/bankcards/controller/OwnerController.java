@@ -6,6 +6,7 @@ import com.example.bankcards.security.JWTUtil;
 import com.example.bankcards.security.OwnerDetails;
 import com.example.bankcards.security.OwnerDetailsService;
 import com.example.bankcards.service.OwnerService;
+import com.example.bankcards.util.validator.OwnerValidator;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -29,17 +30,19 @@ public class OwnerController {
     private final OwnerDetailsService ownerDetailsService;
     private final Logger logger = LoggerFactory.getLogger(OwnerController.class);
     private final OwnerService ownerService;
+    private final OwnerValidator ownerValidator;
 
-    public OwnerController(JWTUtil jwtUtil, AuthenticationManager authenticationManager, OwnerDetailsService ownerDetailsService, OwnerService ownerService) {
+    public OwnerController(JWTUtil jwtUtil, AuthenticationManager authenticationManager, OwnerDetailsService ownerDetailsService, OwnerService ownerService, OwnerValidator ownerValidator) {
         this.jwtUtil = jwtUtil;
         this.authenticationManager = authenticationManager;
         this.ownerDetailsService = ownerDetailsService;
         this.ownerService = ownerService;
+        this.ownerValidator = ownerValidator;
     }
 
     @PostMapping("/registration")
     public ResponseEntity<OwnerResponseDTO> register(@RequestBody @Valid OwnerRequestDTO dto, BindingResult bindingResult) {
-        // TODO (возможно): ownerValidator
+        ownerValidator.validate(dto, bindingResult);
         if (bindingResult.hasErrors()) {
             logger.error("Binding result has errors: ");
             bindingResult.getFieldErrors().forEach(fieldError ->
@@ -88,6 +91,7 @@ public class OwnerController {
 
     @PatchMapping("/update-my-data")
     public ResponseEntity<String> updateCustomerData(@RequestBody @Valid OwnerUpdateDTO dto, BindingResult bindingResult) {
+        ownerValidator.validate(dto, bindingResult);
         if (bindingResult.hasErrors()) {
             logger.error("Binding result has errors: ");
             bindingResult.getFieldErrors().forEach(fieldError ->
