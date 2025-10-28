@@ -464,6 +464,50 @@ class AdminServiceTests {
         }
     }
 
+    @Nested
+    class AdminDeleteCardTests {
+
+        @BeforeEach
+        void initService() {
+            adminService = new AdminService(ownerRepository, ownerMapper, cardRepository, cardMapper);
+        }
+
+        @Test
+        void adminDeleteCard_shouldDelete_whenExists() {
+            Long cardId = 123L;
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("1111");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findById(cardId)).thenReturn(Optional.of(card));
+
+            adminService.adminDeleteCard(cardId);
+
+            verify(cardRepository).findById(cardId);
+            verify(cardRepository).delete(card);
+            verifyNoMoreInteractions(cardRepository);
+            verifyNoInteractions(cardMapper, ownerRepository, ownerMapper);
+        }
+
+        @Test
+        void adminDeleteCard_shouldThrow404_whenNotFound() {
+            when(cardRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThrows(EntityNotFoundException.class, () -> adminService.adminDeleteCard(999L));
+
+            verify(cardRepository).findById(999L);
+            verify(cardRepository, never()).delete(any(Card.class));
+            verifyNoInteractions(cardMapper, ownerRepository, ownerMapper);
+        }
+    }
+
     private Card cloneCard(Card src) {
         Card c = new Card();
         c.setId(src.getId());

@@ -20,10 +20,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @AutoConfigureMockMvc
@@ -330,6 +332,67 @@ class AdminCardControllerTests {
                     .andExpect(jsonPath("$.number").value(1))
                     .andExpect(jsonPath("$.size").value(2))
                     .andExpect(jsonPath("$.content[0].id").value(c3.getId().intValue()));
+        }
+    }
+
+    @Nested
+    class AdminDeleteCardIT {
+
+        @Test
+        void delete_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(delete("/admin/cards/{id}", 1L))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void delete_shouldReturn403_whenUserIsNotAdmin() throws Exception {
+            Owner user = createOwner("user@example.com", Role.USER);
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(delete("/admin/cards/{id}", 1L)
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void delete_shouldReturn404_whenCardNotFound() throws Exception {
+            Owner admin = createOwner("admin@example.com", Role.ADMIN);
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(delete("/admin/cards/{id}", 999999L)
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void delete_shouldReturn204_whenAdminDeletesExisting() throws Exception {
+            Owner admin = createOwner("okadmin@example.com", Role.ADMIN);
+            Owner user  = createOwner("cardowner@example.com", Role.USER);
+            Card  card  = createCard(user, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(delete("/admin/cards/{id}", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isNoContent());
+
+            // Дополнительно убедимся, что карты больше нет в БД
+            assertTrue(cardRepository.findById(card.getId()).isEmpty());
+        }
+
+        @Test
+        void delete_shouldReturn400_whenIdIsNotNumber() throws Exception {
+            Owner admin = createOwner("badid-admin@example.com", Role.ADMIN);
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(delete("/admin/cards/{id}", "abc")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isBadRequest());
+            // тело ошибки (если хочешь): .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'id'"))
         }
     }
 

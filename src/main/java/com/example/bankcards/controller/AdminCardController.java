@@ -54,4 +54,10 @@ public class AdminCardController {
         CardAdminFilter filter = new CardAdminFilter(ownerId, email, status, bin, panLast4);
         return adminService.findCards(filter, pageable);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCard(@PathVariable Long id) {
+        adminService.adminDeleteCard(id);
+        return ResponseEntity.noContent().build(); // 204
+    }
 }

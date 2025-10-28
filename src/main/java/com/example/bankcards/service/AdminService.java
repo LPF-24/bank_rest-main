@@ -137,4 +137,13 @@ public class AdminService {
         Page<Card> page = cardRepository.findAll(CardSpecs.byFilter(filter), pageable);
         return page.map(cardMapper::toResponse);
     }
+
+    @PreAuthorize("hasAuthority('ADMIN')")
+    @Transactional
+    public void adminDeleteCard(Long cardId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        // при необходимости: дополнительные проверки (например, нельзя удалять BLOCKED? — по ТЗ обычно можно)
+        cardRepository.delete(card);
+    }
 }
