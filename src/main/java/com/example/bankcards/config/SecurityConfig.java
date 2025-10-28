@@ -64,7 +64,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers("/owner/registration", "/owner/login").permitAll()
-                        .requestMatchers("/owner/personal-account", "/owner/update-my-data")
+                        .requestMatchers("/owner/personal-account", "/owner/update-my-data", "/cards")
                         .hasAnyAuthority("USER", "ADMIN")
                         .requestMatchers("/admin/promote").hasAuthority("USER")
                         .requestMatchers("/admin/all-customers", "/admin/block-customer/{id}",
