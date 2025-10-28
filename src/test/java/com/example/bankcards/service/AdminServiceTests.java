@@ -1,5 +1,6 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.CardAdminFilter;
 import com.example.bankcards.dto.CardResponseDTO;
 import com.example.bankcards.dto.OwnerAdminUpdateDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -385,6 +388,82 @@ class AdminServiceTests {
         }
     }
 
+    @Nested
+    class FindCardsByFilterTests {
+
+        @BeforeEach
+        void initService() {
+            adminService = new AdminService(ownerRepository, ownerMapper, cardRepository, cardMapper);
+        }
+
+        @Test
+        void findCards_shouldReturnPage_mappedToDto_withoutFilters() {
+            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+            Card card1 = sampleCard(1L, "1111", CardStatus.ACTIVE, Currency.USD);
+            Card card2 = sampleCard(2L, "2222", CardStatus.BLOCKED, Currency.USD);
+
+            Page<Card> page = new PageImpl<>(List.of(card1, card2), pageable, 2);
+            when(cardRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+
+            CardResponseDTO dto1 = sampleDto(1L, "1111", CardStatus.ACTIVE, Currency.USD);
+            CardResponseDTO dto2 = sampleDto(2L, "2222", CardStatus.BLOCKED, Currency.USD);
+            when(cardMapper.toResponse(card1)).thenReturn(dto1);
+            when(cardMapper.toResponse(card2)).thenReturn(dto2);
+
+            // без фильтров
+            var result = adminService.findCards(new CardAdminFilter(null, null, null, null, null), pageable);
+
+            assertNotNull(result);
+            assertEquals(2, result.getTotalElements());
+            assertEquals(2, result.getContent().size());
+            assertEquals(1L, result.getContent().get(0).getId());
+            assertEquals(CardStatus.BLOCKED, result.getContent().get(1).getStatus());
+
+            verify(cardRepository).findAll(any(Specification.class), eq(pageable));
+            verify(cardMapper).toResponse(card1);
+            verify(cardMapper).toResponse(card2);
+            verifyNoMoreInteractions(cardRepository, cardMapper);
+        }
+
+        @Test
+        void findCards_shouldApplyStatusFilter() {
+            Pageable pageable = PageRequest.of(0, 10);
+            CardStatus status = CardStatus.BLOCKED;
+
+            Card card = sampleCard(3L, "3333", status, Currency.USD);
+            Page<Card> page = new PageImpl<>(List.of(card), pageable, 1);
+            when(cardRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+
+            CardResponseDTO dto = sampleDto(3L, "3333", status, Currency.USD);
+            when(cardMapper.toResponse(card)).thenReturn(dto);
+
+            var filter = new CardAdminFilter(null, null, status, null, null);
+            var result = adminService.findCards(filter, pageable);
+
+            assertEquals(1, result.getTotalElements());
+            assertEquals(status, result.getContent().get(0).getStatus());
+            verify(cardRepository).findAll(any(Specification.class), eq(pageable));
+        }
+
+        @Test
+        void findCards_shouldApplyOwnerEmailAndBinAndLast4Filters() {
+            Pageable pageable = PageRequest.of(0, 5);
+            Card card = sampleCard(5L, "5555", CardStatus.ACTIVE, Currency.USD);
+            Page<Card> page = new PageImpl<>(List.of(card), pageable, 1);
+            when(cardRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+
+            when(cardMapper.toResponse(card)).thenReturn(sampleDto(5L, "5555", CardStatus.ACTIVE, Currency.USD));
+
+            var filter = new CardAdminFilter(null, "user@example.com", CardStatus.ACTIVE, "400000", "5555");
+            var result = adminService.findCards(filter, pageable);
+
+            assertEquals(1, result.getTotalElements());
+            assertEquals("**** **** **** 5555", result.getContent().get(0).getMaskedPan());
+            verify(cardRepository).findAll(any(Specification.class), eq(pageable));
+        }
+    }
+
     private Card cloneCard(Card src) {
         Card c = new Card();
         c.setId(src.getId());
@@ -419,5 +498,29 @@ class AdminServiceTests {
         response.setEmail(EMAIL);
         response.setRole(Role.USER);
         return response;
+    }
+
+    private Card sampleCard(Long id, String last4, CardStatus status, Currency currency) {
+        Card c = new Card();
+        c.setId(id);
+        c.setPan("stub");
+        c.setPanLast4(last4);
+        c.setBin("400000");
+        c.setExpiryMonth((short)10);
+        c.setExpiryYear((short)2030);
+        c.setStatus(status);
+        c.setBalance(BigDecimal.ZERO);
+        c.setCurrency(currency);
+        return c;
+    }
+
+    private CardResponseDTO sampleDto(Long id, String last4, CardStatus status, Currency currency) {
+        CardResponseDTO dto = new CardResponseDTO();
+        dto.setId(id);
+        dto.setMaskedPan("**** **** **** " + last4);
+        dto.setStatus(status);
+        dto.setBalance(BigDecimal.ZERO);
+        dto.setCurrency(currency);
+        return dto;
     }
 }

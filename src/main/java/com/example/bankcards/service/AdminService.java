@@ -1,5 +1,6 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.CardAdminFilter;
 import com.example.bankcards.dto.CardResponseDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
 import com.example.bankcards.entity.Card;
@@ -10,7 +11,10 @@ import com.example.bankcards.mapper.CardMapper;
 import com.example.bankcards.mapper.OwnerMapper;
 import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
+import com.example.bankcards.util.CardSpecs;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -126,5 +130,11 @@ public class AdminService {
             card = cardRepository.save(card);
         }
         return cardMapper.toResponse(card);
+    }
+
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public Page<CardResponseDTO> findCards(CardAdminFilter filter, Pageable pageable) {
+        Page<Card> page = cardRepository.findAll(CardSpecs.byFilter(filter), pageable);
+        return page.map(cardMapper::toResponse);
     }
 }

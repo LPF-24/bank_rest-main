@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @AutoConfigureMockMvc
@@ -212,6 +213,123 @@ class AdminCardControllerTests {
                             .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
+    }
+
+    @Nested
+    class AdminFindCardsIntegrationTests {
+
+        @Test
+        void findAll_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(get("/admin/cards"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void findAll_shouldReturn403_whenUserRole() throws Exception {
+            Owner user = createOwner("user@example.com", Role.USER);
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void findAll_shouldReturn200_andSortedByCreatedAtDesc_forAdmin() throws Exception {
+            Owner admin = createOwner("admin@example.com", Role.ADMIN);
+            Owner a = createOwner("a@example.com", Role.USER);
+
+            // 3 карты одному пользователю с разными created_at
+            Card newest = createCard(a, "1111", LocalDateTime.now().plusMinutes(2), CardStatus.ACTIVE);
+            Card mid    = createCard(a, "2222", LocalDateTime.now(),               CardStatus.BLOCKED);
+            Card oldest = createCard(a, "3333", LocalDateTime.now().minusMinutes(5), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].id").value(newest.getId().intValue()))
+                    .andExpect(jsonPath("$.content[1].id").value(mid.getId().intValue()))
+                    .andExpect(jsonPath("$.content[2].id").value(oldest.getId().intValue()))
+                    .andExpect(jsonPath("$.size").value(20))
+                    .andExpect(jsonPath("$.number").value(0));
+        }
+
+        @Test
+        void findAll_shouldFilterByOwnerId() throws Exception {
+            Owner admin = createOwner("admin2@example.com", Role.ADMIN);
+            Owner o1 = createOwner("u1@example.com", Role.USER);
+            Owner o2 = createOwner("u2@example.com", Role.USER);
+
+            createCard(o1, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+            createCard(o2, "2222", LocalDateTime.now(), CardStatus.BLOCKED);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .param("ownerId", o1.getId().toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].ownerId").value(o1.getId()))
+                    .andExpect(jsonPath("$.content[0].maskedPan").value("**** **** **** 1111"));
+        }
+
+        @Test
+        void findAll_shouldFilterByEmailStatusBinAndLast4() throws Exception {
+            Owner admin = createOwner("admin3@example.com", Role.ADMIN);
+            Owner u = createOwner("filter@example.com", Role.USER);
+
+            createCard(u, "4444", LocalDateTime.now(), CardStatus.ACTIVE);
+            createCard(u, "5555", LocalDateTime.now(), CardStatus.BLOCKED); // ожидаем найти эту
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .param("email", "filter@example.com")
+                            .param("status", "BLOCKED")
+                            .param("bin", "400000")
+                            .param("panLast4", "5555"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].status").value("BLOCKED"))
+                    .andExpect(jsonPath("$.content[0].maskedPan").value("**** **** **** 5555"));
+        }
+
+        @Test
+        void findAll_shouldSupportPagination() throws Exception {
+            Owner admin = createOwner("admin4@example.com", Role.ADMIN);
+            Owner u = createOwner("pag@example.com", Role.USER);
+
+            Card c1 = createCard(u, "1001", LocalDateTime.now().plusMinutes(3), CardStatus.ACTIVE);
+            Card c2 = createCard(u, "1002", LocalDateTime.now().plusMinutes(2), CardStatus.ACTIVE);
+            Card c3 = createCard(u, "1003", LocalDateTime.now().plusMinutes(1), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(admin.getId(), admin.getEmail(), "ADMIN");
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .param("page", "0")
+                            .param("size", "2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(2))
+                    .andExpect(jsonPath("$.totalElements").value(3))
+                    .andExpect(jsonPath("$.number").value(0))
+                    .andExpect(jsonPath("$.size").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(c1.getId().intValue()));
+
+            mockMvc.perform(get("/admin/cards")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .param("page", "1")
+                            .param("size", "2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.number").value(1))
+                    .andExpect(jsonPath("$.size").value(2))
+                    .andExpect(jsonPath("$.content[0].id").value(c3.getId().intValue()));
         }
     }
 
