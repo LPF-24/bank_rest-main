@@ -1,10 +1,12 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.CardResponseDTO;
 import com.example.bankcards.dto.OwnerAdminUpdateDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
-import com.example.bankcards.entity.Owner;
-import com.example.bankcards.entity.Role;
+import com.example.bankcards.entity.*;
+import com.example.bankcards.mapper.CardMapper;
 import com.example.bankcards.mapper.OwnerMapper;
+import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +38,12 @@ class AdminServiceTests {
 
     @Mock
     private OwnerMapper ownerMapper;
+
+    @Mock
+    private CardRepository cardRepository;
+
+    @Mock
+    private CardMapper cardMapper;
 
     @InjectMocks
     private AdminService adminService;
@@ -67,7 +76,7 @@ class AdminServiceTests {
     class FindAllUsersTests {
         @BeforeEach
         void setUp() {
-            adminService = new AdminService(ownerRepository, ownerMapper);
+            adminService = new AdminService(ownerRepository, ownerMapper, cardRepository, cardMapper);
         }
 
         @Test
@@ -226,6 +235,168 @@ class AdminServiceTests {
                     () -> adminService.updateCustomerDataByAdmin(1L, dto));
             verify(ownerRepository, never()).save(any());
         }
+    }
+
+    @Nested
+    class AdminBlockUnblockTests {
+
+        @Test
+        void adminBlockCard_shouldSetBlocked_whenActive() {
+            Long cardId = 100L;
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("1111");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findById(cardId)).thenReturn(Optional.of(card));
+
+            Card blocked = cloneCard(card);
+            blocked.setStatus(CardStatus.BLOCKED);
+            when(cardRepository.save(any(Card.class))).thenReturn(blocked);
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 1111");
+            dto.setStatus(CardStatus.BLOCKED);
+            when(cardMapper.toResponse(blocked)).thenReturn(dto);
+
+            CardResponseDTO result = adminService.adminBlockCard(cardId);
+
+            assertEquals(CardStatus.BLOCKED, result.getStatus());
+            verify(cardRepository).findById(cardId);
+            verify(cardRepository).save(argThat(c -> c.getStatus() == CardStatus.BLOCKED));
+            verify(cardMapper).toResponse(blocked);
+        }
+
+        @Test
+        void adminBlockCard_shouldBeIdempotent_whenAlreadyBlocked() {
+            Long cardId = 101L;
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("2222");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.BLOCKED);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findById(cardId)).thenReturn(Optional.of(card));
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 2222");
+            dto.setStatus(CardStatus.BLOCKED);
+            when(cardMapper.toResponse(card)).thenReturn(dto);
+
+            CardResponseDTO result = adminService.adminBlockCard(cardId);
+
+            assertEquals(CardStatus.BLOCKED, result.getStatus());
+            verify(cardRepository).findById(cardId);
+            verify(cardRepository, never()).save(any());
+            verify(cardMapper).toResponse(card);
+        }
+
+        @Test
+        void adminUnblockCard_shouldSetActive_whenBlocked() {
+            Long cardId = 102L;
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("3333");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.BLOCKED);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findById(cardId)).thenReturn(Optional.of(card));
+
+            Card active = cloneCard(card);
+            active.setStatus(CardStatus.ACTIVE);
+            when(cardRepository.save(any(Card.class))).thenReturn(active);
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 3333");
+            dto.setStatus(CardStatus.ACTIVE);
+            when(cardMapper.toResponse(active)).thenReturn(dto);
+
+            CardResponseDTO result = adminService.adminUnblockCard(cardId);
+
+            assertEquals(CardStatus.ACTIVE, result.getStatus());
+            verify(cardRepository).findById(cardId);
+            verify(cardRepository).save(argThat(c -> c.getStatus() == CardStatus.ACTIVE));
+            verify(cardMapper).toResponse(active);
+        }
+
+        @Test
+        void adminUnblockCard_shouldBeIdempotent_whenAlreadyActive() {
+            Long cardId = 103L;
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("4444");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findById(cardId)).thenReturn(Optional.of(card));
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 4444");
+            dto.setStatus(CardStatus.ACTIVE);
+            when(cardMapper.toResponse(card)).thenReturn(dto);
+
+            CardResponseDTO result = adminService.adminUnblockCard(cardId);
+
+            assertEquals(CardStatus.ACTIVE, result.getStatus());
+            verify(cardRepository).findById(cardId);
+            verify(cardRepository, never()).save(any());
+            verify(cardMapper).toResponse(card);
+        }
+
+        @Test
+        void adminBlockCard_shouldThrow404_whenNotFound() {
+            when(cardRepository.findById(999L)).thenReturn(Optional.empty());
+            assertThrows(EntityNotFoundException.class, () -> adminService.adminBlockCard(999L));
+        }
+
+        @Test
+        void adminUnblockCard_shouldThrow404_whenNotFound() {
+            when(cardRepository.findById(999L)).thenReturn(Optional.empty());
+            assertThrows(EntityNotFoundException.class, () -> adminService.adminUnblockCard(999L));
+        }
+    }
+
+    private Card cloneCard(Card src) {
+        Card c = new Card();
+        c.setId(src.getId());
+        c.setPan(src.getPan());
+        c.setPanLast4(src.getPanLast4());
+        c.setBin(src.getBin());
+        c.setExpiryMonth(src.getExpiryMonth());
+        c.setExpiryYear(src.getExpiryYear());
+        c.setStatus(src.getStatus());
+        c.setBalance(src.getBalance());
+        c.setCurrency(src.getCurrency());
+        return c;
     }
 
     private static Owner createSampleOwner() {

@@ -1,9 +1,14 @@
 package com.example.bankcards.service;
 
+import com.example.bankcards.dto.CardResponseDTO;
 import com.example.bankcards.dto.OwnerResponseDTO;
+import com.example.bankcards.entity.Card;
+import com.example.bankcards.entity.CardStatus;
 import com.example.bankcards.entity.Owner;
 import com.example.bankcards.entity.Role;
+import com.example.bankcards.mapper.CardMapper;
 import com.example.bankcards.mapper.OwnerMapper;
+import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -21,10 +26,14 @@ import java.util.stream.Stream;
 public class AdminService {
     private final OwnerRepository ownerRepository;
     private final OwnerMapper ownerMapper;
+    private final CardRepository cardRepository;
+    private final CardMapper cardMapper;
 
-    public AdminService(OwnerRepository ownerRepository, OwnerMapper ownerMapper) {
+    public AdminService(OwnerRepository ownerRepository, OwnerMapper ownerMapper, CardRepository cardRepository, CardMapper cardMapper) {
         this.ownerRepository = ownerRepository;
         this.ownerMapper = ownerMapper;
+        this.cardRepository = cardRepository;
+        this.cardMapper = cardMapper;
     }
 
     @Transactional
@@ -95,5 +104,27 @@ public class AdminService {
 
         Owner updated = ownerRepository.save(owner);
         return ownerMapper.toResponse(updated);
+    }
+
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public CardResponseDTO adminBlockCard(Long cardId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        if (card.getStatus() != CardStatus.BLOCKED) {
+            card.setStatus(CardStatus.BLOCKED);
+            card = cardRepository.save(card);
+        }
+        return cardMapper.toResponse(card);
+    }
+
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public CardResponseDTO adminUnblockCard(Long cardId) {
+        Card card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        if (card.getStatus() == CardStatus.BLOCKED) {
+            card.setStatus(CardStatus.ACTIVE);
+            card = cardRepository.save(card);
+        }
+        return cardMapper.toResponse(card);
     }
 }
