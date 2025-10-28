@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -98,5 +99,22 @@ public class GlobalExceptionHandler {
         error.setPath(request.getRequestURI());
 
         return ResponseEntity.status(ex.getStatusCode()).body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponseDTO> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+                                                                         HttpServletRequest request) {
+        String combinedErrors = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(err -> err.getField() + ": " + err.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+
+        ErrorResponseDTO response = new ErrorResponseDTO();
+        response.setStatus(HttpStatus.BAD_REQUEST.value());
+        response.setMessage(combinedErrors);
+        response.setPath(request.getRequestURI());
+
+        return ResponseEntity.badRequest().body(response);
     }
 }

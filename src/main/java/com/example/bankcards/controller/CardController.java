@@ -1,17 +1,16 @@
 package com.example.bankcards.controller;
 
 import com.example.bankcards.dto.CardResponseDTO;
+import com.example.bankcards.dto.DepositRequestDTO;
 import com.example.bankcards.security.OwnerDetails;
 import com.example.bankcards.service.CardService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/cards")
@@ -34,6 +33,24 @@ public class CardController {
             @AuthenticationPrincipal OwnerDetails me,
             @PathVariable Long id) {
         return cardService.getMyCardById(me.getId(), id);
+    }
+
+    @PostMapping("/{id}/deposit")
+    public CardResponseDTO depositMyCard(
+            @AuthenticationPrincipal OwnerDetails me,
+            @PathVariable Long id,
+            @RequestBody @Valid DepositRequestDTO dto
+    ) {
+        return cardService.depositMyCard(me.getId(), id, dto.getAmount());
+    }
+
+    @PostMapping("/{id}/withdraw")
+    public CardResponseDTO withdrawMyCard(
+            @AuthenticationPrincipal OwnerDetails me,
+            @PathVariable Long id,
+            @RequestBody @Valid DepositRequestDTO dto // можно переиспользовать тот же DTO с amount
+    ) {
+        return cardService.withdrawMyCard(me.getId(), id, dto.getAmount());
     }
 }
 

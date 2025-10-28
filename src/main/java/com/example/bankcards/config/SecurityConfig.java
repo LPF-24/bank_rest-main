@@ -65,7 +65,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/owner/registration", "/owner/login").permitAll()
                         .requestMatchers("/owner/personal-account", "/owner/update-my-data", "/cards",
-                                "/cards/{id}")
+                                "/cards/{id}", "/cards/{id}/deposit", "/cards/{id}/withdraw")
                         .hasAnyAuthority("USER", "ADMIN")
                         .requestMatchers("/admin/promote").hasAuthority("USER")
                         .requestMatchers("/admin/all-customers", "/admin/block-customer/{id}",

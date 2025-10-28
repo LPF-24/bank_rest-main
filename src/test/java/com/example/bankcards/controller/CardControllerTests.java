@@ -24,6 +24,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -211,5 +215,144 @@ class CardControllerTests {
         );
 
         return c;
+    }
+
+    @Nested
+    class MyCardDepositWithdrawIT {
+
+        @Test
+        void deposit_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(post("/cards/{id}/deposit", 1L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void withdraw_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(post("/cards/{id}/withdraw", 1L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void deposit_shouldReturn404_whenNotOwner() throws Exception {
+            Owner me = createOwner("me@example.com", Role.USER);
+            Owner other = createOwner("other@example.com", Role.USER);
+            Card others = createCard(other, "9999", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/deposit", others.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void withdraw_shouldReturn404_whenNotOwner() throws Exception {
+            Owner me = createOwner("me2@example.com", Role.USER);
+            Owner other = createOwner("other2@example.com", Role.USER);
+            Card others = createCard(other, "8888", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/withdraw", others.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void deposit_shouldReturn400_whenAmountInvalid() throws Exception {
+            Owner me = createOwner("badamount@example.com", Role.USER);
+            Card card = createCard(me, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/deposit", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 0}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void deposit_shouldReturn409_whenBlocked() throws Exception {
+            Owner me = createOwner("blocked@example.com", Role.USER);
+            Card card = createCard(me, "2222", LocalDateTime.now(), CardStatus.BLOCKED);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/deposit", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
+        void deposit_shouldReturn200_andIncreaseBalance_whenOwner() throws Exception {
+            Owner me = createOwner("okdep@example.com", Role.USER);
+            Card card = createCard(me, "3333", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/deposit", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 150.25}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(card.getId().intValue()))
+                    .andExpect(jsonPath("$.status").value("ACTIVE"))
+                    .andExpect(jsonPath("$.balance").value(150.25));
+        }
+
+        @Test
+        void withdraw_shouldReturn409_whenInsufficientFunds() throws Exception {
+            Owner me = createOwner("nofunds@example.com", Role.USER);
+            Card card = createCard(me, "4444", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/{id}/withdraw", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 10}"))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
+        void withdraw_shouldReturn200_andDecreaseBalance_whenOwnerAndEnough() throws Exception {
+            Owner me = createOwner("okwd@example.com", Role.USER);
+            Card card = createCard(me, "5555", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            // сначала кладём 100, чтобы были средства
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+            mockMvc.perform(post("/cards/{id}/deposit", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 100}"))
+                    .andExpect(status().isOk());
+
+            // теперь снимаем 40 → баланс 60
+            mockMvc.perform(post("/cards/{id}/withdraw", card.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 40}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.balance").value(60.00));
+        }
     }
 }

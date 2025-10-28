@@ -90,4 +90,39 @@ public class CardService {
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
         return cardMapper.toResponse(card);
     }
+
+    @PreAuthorize("isAuthenticated()")
+    @Transactional
+    public CardResponseDTO depositMyCard(Long ownerId, Long cardId, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive");
+        }
+        Card card = cardRepository.findByIdAndOwnerId(cardId, ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        if (card.getStatus() == CardStatus.BLOCKED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Card is blocked");
+        }
+        card.setBalance(card.getBalance().add(amount));
+        Card saved = cardRepository.save(card);
+        return cardMapper.toResponse(saved);
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @Transactional
+    public CardResponseDTO withdrawMyCard(Long ownerId, Long cardId, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive");
+        }
+        Card card = cardRepository.findByIdAndOwnerId(cardId, ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        if (card.getStatus() == CardStatus.BLOCKED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Card is blocked");
+        }
+        if (card.getBalance().compareTo(amount) < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient funds");
+        }
+        card.setBalance(card.getBalance().subtract(amount));
+        Card saved = cardRepository.save(card);
+        return cardMapper.toResponse(saved);
+    }
 }

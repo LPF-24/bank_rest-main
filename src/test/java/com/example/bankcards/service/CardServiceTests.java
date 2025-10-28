@@ -17,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -229,6 +231,161 @@ class CardServiceTests {
 
             verify(cardRepository).findByIdAndOwnerId(cardId, ownerId);
             verifyNoInteractions(cardMapper);
+        }
+    }
+
+    @Nested
+    class DepositWithdrawMyCardTests {
+
+        @BeforeEach
+        void initService() {
+            // твой конструктор: (cardRepository, ownerRepository, cardMapper, defaultBin, defaultCurrency)
+            cardService = new CardService(cardRepository, ownerRepository, cardMapper, "400000", "USD");
+        }
+
+        @Test
+        void depositMyCard_shouldIncreaseBalance_whenOwnerAndActive() {
+            Long ownerId = 7L, cardId = 100L;
+            BigDecimal amount = new BigDecimal("50.00");
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("1111");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.of(card));
+
+            Card after = cloneCard(card);
+            after.setBalance(new BigDecimal("50.00"));
+            when(cardRepository.save(any(Card.class))).thenReturn(after);
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 1111");
+            dto.setStatus(CardStatus.ACTIVE);
+            dto.setBalance(new BigDecimal("50.00"));
+            dto.setCurrency(Currency.USD);
+            when(cardMapper.toResponse(after)).thenReturn(dto);
+
+            CardResponseDTO res = cardService.depositMyCard(ownerId, cardId, amount);
+
+            assertEquals(new BigDecimal("50.00"), res.getBalance());
+            verify(cardRepository).findByIdAndOwnerId(cardId, ownerId);
+            verify(cardRepository).save(argThat(c -> c.getBalance().compareTo(new BigDecimal("50.00")) == 0));
+            verify(cardMapper).toResponse(after);
+        }
+
+        @Test
+        void depositMyCard_shouldReturn400_whenAmountInvalid() {
+            assertThrows(ResponseStatusException.class, () -> cardService.depositMyCard(1L, 1L, BigDecimal.ZERO));
+            assertThrows(ResponseStatusException.class, () -> cardService.depositMyCard(1L, 1L, new BigDecimal("-5")));
+        }
+
+        @Test
+        void depositMyCard_shouldReturn404_whenCardNotOwned() {
+            when(cardRepository.findByIdAndOwnerId(99L, 1L)).thenReturn(Optional.empty());
+            assertThrows(EntityNotFoundException.class, () -> cardService.depositMyCard(1L, 99L, new BigDecimal("1")));
+        }
+
+        @Test
+        void depositMyCard_shouldReturn409_whenBlocked() {
+            Long ownerId = 2L, cardId = 200L;
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("2222");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.BLOCKED);
+            card.setBalance(new BigDecimal("10.00"));
+            card.setCurrency(Currency.USD);
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.of(card));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> cardService.depositMyCard(ownerId, cardId, new BigDecimal("5")));
+            assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+            verify(cardRepository, never()).save(any());
+        }
+
+        @Test
+        void withdrawMyCard_shouldDecreaseBalance_whenOwnerAndEnoughFunds() {
+            Long ownerId = 3L, cardId = 300L;
+            BigDecimal amount = new BigDecimal("40.00");
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("3333");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(new BigDecimal("100.00"));
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.of(card));
+
+            Card after = cloneCard(card);
+            after.setBalance(new BigDecimal("60.00"));
+            when(cardRepository.save(any(Card.class))).thenReturn(after);
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 3333");
+            dto.setStatus(CardStatus.ACTIVE);
+            dto.setBalance(new BigDecimal("60.00"));
+            dto.setCurrency(Currency.USD);
+            when(cardMapper.toResponse(after)).thenReturn(dto);
+
+            CardResponseDTO res = cardService.withdrawMyCard(ownerId, cardId, amount);
+
+            assertEquals(new BigDecimal("60.00"), res.getBalance());
+            verify(cardRepository).findByIdAndOwnerId(cardId, ownerId);
+            verify(cardRepository).save(argThat(c -> c.getBalance().compareTo(new BigDecimal("60.00")) == 0));
+            verify(cardMapper).toResponse(after);
+        }
+
+        @Test
+        void withdrawMyCard_shouldReturn409_whenInsufficientFunds() {
+            Long ownerId = 4L, cardId = 400L;
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");
+            card.setPanLast4("4444");
+            card.setBin("400000");
+            card.setExpiryMonth((short)10);
+            card.setExpiryYear((short)2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(new BigDecimal("30.00"));
+            card.setCurrency(Currency.USD);
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.of(card));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> cardService.withdrawMyCard(ownerId, cardId, new BigDecimal("50.00")));
+            assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+            verify(cardRepository, never()).save(any());
+            verifyNoInteractions(cardMapper);
+        }
+
+        private Card cloneCard(Card src) {
+            Card c = new Card();
+            c.setId(src.getId());
+            c.setPan(src.getPan());
+            c.setPanLast4(src.getPanLast4());
+            c.setBin(src.getBin());
+            c.setExpiryMonth(src.getExpiryMonth());
+            c.setExpiryYear(src.getExpiryYear());
+            c.setStatus(src.getStatus());
+            c.setBalance(src.getBalance());
+            c.setCurrency(src.getCurrency());
+            return c;
         }
     }
 }
