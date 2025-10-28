@@ -2,6 +2,7 @@ package com.example.bankcards.service;
 
 import com.example.bankcards.dto.CardCreateRequestDTO;
 import com.example.bankcards.dto.CardResponseDTO;
+import com.example.bankcards.dto.TransferResponseDTO;
 import com.example.bankcards.entity.Card;
 import com.example.bankcards.entity.CardStatus;
 import com.example.bankcards.entity.Currency;
@@ -22,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Service
 public class CardService {
@@ -124,5 +126,52 @@ public class CardService {
         card.setBalance(card.getBalance().subtract(amount));
         Card saved = cardRepository.save(card);
         return cardMapper.toResponse(saved);
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @Transactional
+    public TransferResponseDTO transferBetweenMyCards(Long ownerId, Long fromId, Long toId, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive");
+        }
+        if (Objects.equals(fromId, toId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and destination cards must differ");
+        }
+
+        Card from = cardRepository.findByIdAndOwnerId(fromId, ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Source card not found"));
+        Card to = cardRepository.findByIdAndOwnerId(toId, ownerId
+        ).orElseThrow(() -> new EntityNotFoundException("Destination card not found"));
+
+        // Валидируем статусы
+        if (from.getStatus() == CardStatus.BLOCKED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Source card is blocked");
+        }
+        if (to.getStatus() == CardStatus.BLOCKED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Destination card is blocked");
+        }
+
+        // (опционально) проверка валют
+        if (from.getCurrency() != to.getCurrency()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Currency mismatch");
+        }
+
+        // Достаточно ли средств
+        if (from.getBalance().compareTo(amount) < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient funds");
+        }
+
+        // Денежные операции
+        from.setBalance(from.getBalance().subtract(amount));
+        to.setBalance(to.getBalance().add(amount));
+
+        // Сохраняем обе — в одной транзакции
+        Card savedFrom = cardRepository.save(from);
+        Card savedTo   = cardRepository.save(to);
+
+        TransferResponseDTO resp = new TransferResponseDTO();
+        resp.setFrom(cardMapper.toResponse(savedFrom));
+        resp.setTo(cardMapper.toResponse(savedTo));
+        return resp;
     }
 }

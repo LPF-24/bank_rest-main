@@ -2,6 +2,7 @@ package com.example.bankcards.service;
 
 import com.example.bankcards.dto.CardCreateRequestDTO;
 import com.example.bankcards.dto.CardResponseDTO;
+import com.example.bankcards.dto.TransferResponseDTO;
 import com.example.bankcards.entity.Card;
 import com.example.bankcards.entity.CardStatus;
 import com.example.bankcards.entity.Currency;
@@ -373,19 +374,135 @@ class CardServiceTests {
             verify(cardRepository, never()).save(any());
             verifyNoInteractions(cardMapper);
         }
+    }
 
-        private Card cloneCard(Card src) {
+    @Nested
+    class TransferBetweenMyCardsTests {
+
+        @BeforeEach
+        void initService() {
+            cardService = new CardService(cardRepository, ownerRepository, cardMapper, "400000", "USD");
+        }
+
+        @Test
+        void transfer_shouldMoveFunds_whenOwnerActiveAndEnough() {
+            Long ownerId = 7L;
+            Long fromId = 101L, toId = 202L;
+            BigDecimal amount = new BigDecimal("40.00");
+
+            // given
+            Card from = baseCard(fromId, "1111", CardStatus.ACTIVE, new BigDecimal("100.00"));
+            Card to   = baseCard(toId, "2222", CardStatus.ACTIVE, new BigDecimal("5.00"));
+
+            when(cardRepository.findByIdAndOwnerId(fromId, ownerId)).thenReturn(Optional.of(from));
+            when(cardRepository.findByIdAndOwnerId(toId, ownerId)).thenReturn(Optional.of(to));
+
+            // после операции должны получиться такие состояния
+            Card savedFrom = cloneCard(from);
+            savedFrom.setBalance(new BigDecimal("60.00")); // 100 - 40
+
+            Card savedTo = cloneCard(to);
+            savedTo.setBalance(new BigDecimal("45.00"));   // 5 + 40
+
+            // вместо двух argThat(...) — один универсальный Answer, чтобы избежать NPE
+            when(cardRepository.save(any(Card.class))).thenAnswer(inv -> {
+                Card c = inv.getArgument(0);
+                if (c != null && fromId.equals(c.getId())) return savedFrom;
+                if (c != null && toId.equals(c.getId()))   return savedTo;
+                return c; // fallback
+            });
+
+            CardResponseDTO fromDto = dtoOf(savedFrom.getId(), "1111", savedFrom.getBalance(), CardStatus.ACTIVE);
+            CardResponseDTO toDto   = dtoOf(savedTo.getId(), "2222", savedTo.getBalance(), CardStatus.ACTIVE);
+
+            when(cardMapper.toResponse(savedFrom)).thenReturn(fromDto);
+            when(cardMapper.toResponse(savedTo)).thenReturn(toDto);
+
+            // when
+            TransferResponseDTO res = cardService.transferBetweenMyCards(ownerId, fromId, toId, amount);
+
+            // then
+            assertEquals(new BigDecimal("60.00"), res.getFrom().getBalance());
+            assertEquals(new BigDecimal("45.00"), res.getTo().getBalance());
+
+            verify(cardRepository).findByIdAndOwnerId(fromId, ownerId);
+            verify(cardRepository).findByIdAndOwnerId(toId, ownerId);
+            verify(cardRepository, times(2)).save(any(Card.class));
+            verify(cardMapper).toResponse(savedFrom);
+            verify(cardMapper).toResponse(savedTo);
+        }
+
+        @Test
+        void transfer_should400_whenAmountInvalid_orSameCard() {
+            assertThrows(ResponseStatusException.class,
+                    () -> cardService.transferBetweenMyCards(1L, 10L, 20L, BigDecimal.ZERO));
+            assertThrows(ResponseStatusException.class,
+                    () -> cardService.transferBetweenMyCards(1L, 10L, 10L, new BigDecimal("1")));
+        }
+
+        @Test
+        void transfer_should404_whenFromOrToNotOwned() {
+            when(cardRepository.findByIdAndOwnerId(10L, 1L)).thenReturn(Optional.empty());
+            assertThrows(EntityNotFoundException.class,
+                    () -> cardService.transferBetweenMyCards(1L, 10L, 20L, new BigDecimal("1")));
+        }
+
+        @Test
+        void transfer_should409_whenBlockedOrInsufficient_orCurrencyMismatch() {
+            Long ownerId = 1L;
+            Card from = baseCard(1L, "1111", CardStatus.BLOCKED, new BigDecimal("100"));
+            Card to   = baseCard(2L, "2222", CardStatus.ACTIVE,  new BigDecimal("0"));
+
+            when(cardRepository.findByIdAndOwnerId(1L, ownerId)).thenReturn(Optional.of(from));
+            when(cardRepository.findByIdAndOwnerId(2L, ownerId)).thenReturn(Optional.of(to));
+
+            assertEquals(HttpStatus.CONFLICT,
+                    assertThrows(ResponseStatusException.class,
+                            () -> cardService.transferBetweenMyCards(ownerId, 1L, 2L, new BigDecimal("10")))
+                            .getStatusCode());
+
+            // недостаточно средств
+            from.setStatus(CardStatus.ACTIVE);
+            from.setBalance(new BigDecimal("5"));
+            assertEquals(HttpStatus.CONFLICT,
+                    assertThrows(ResponseStatusException.class,
+                            () -> cardService.transferBetweenMyCards(ownerId, 1L, 2L, new BigDecimal("10")))
+                            .getStatusCode());
+        }
+
+        // helpers
+        private Card baseCard(Long id, String last4, CardStatus st, BigDecimal bal) {
             Card c = new Card();
-            c.setId(src.getId());
-            c.setPan(src.getPan());
-            c.setPanLast4(src.getPanLast4());
-            c.setBin(src.getBin());
-            c.setExpiryMonth(src.getExpiryMonth());
-            c.setExpiryYear(src.getExpiryYear());
-            c.setStatus(src.getStatus());
-            c.setBalance(src.getBalance());
-            c.setCurrency(src.getCurrency());
+            c.setId(id);
+            c.setPan("stub");
+            c.setPanLast4(last4);
+            c.setBin("400000");
+            c.setExpiryMonth((short)10);
+            c.setExpiryYear((short)2030);
+            c.setStatus(st);
+            c.setBalance(bal);
+            c.setCurrency(Currency.USD);
             return c;
         }
+
+        private Card cloneCard(Card s){ Card c=baseCard(s.getId(), s.getPanLast4(), s.getStatus(), s.getBalance()); return c;}
+        private CardResponseDTO dtoOf(Long id, String last4, BigDecimal bal, CardStatus st){
+            CardResponseDTO d=new CardResponseDTO(); d.setId(id); d.setMaskedPan("**** **** **** "+last4);
+            d.setBalance(bal); d.setStatus(st); d.setCurrency(Currency.USD); return d;
+        }
+    }
+
+    private Card cloneCard(Card src) {
+        Card c = new Card();
+        c.setId(src.getId());
+        c.setPan(src.getPan());
+        c.setPanLast4(src.getPanLast4());
+        c.setBin(src.getBin());
+        c.setExpiryMonth(src.getExpiryMonth());
+        c.setExpiryYear(src.getExpiryYear());
+        c.setStatus(src.getStatus());
+        c.setBalance(src.getBalance());
+        c.setCurrency(src.getCurrency());
+        return c;
     }
 }

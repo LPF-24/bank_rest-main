@@ -355,4 +355,104 @@ class CardControllerTests {
                     .andExpect(jsonPath("$.balance").value(60.00));
         }
     }
+
+    @Nested
+    class MyCardsTransferIT {
+
+        @Test
+        void transfer_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(post("/cards/transfer")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":1,\"toCardId\":2,\"amount\":10}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void transfer_shouldReturn404_whenAnyCardNotOwned() throws Exception {
+            Owner me = createOwner("me@example.com", Role.USER);
+            Owner other = createOwner("other@example.com", Role.USER);
+            Card my = createCard(me, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+            Card others = createCard(other, "2222", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            mockMvc.perform(post("/cards/transfer")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":" + my.getId() + ",\"toCardId\":" + others.getId() + ",\"amount\":10}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void transfer_shouldReturn400_whenAmountInvalid_orSameCard() throws Exception {
+            Owner me = createOwner("bad@example.com", Role.USER);
+            Card a = createCard(me, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            // amount = 0
+            mockMvc.perform(post("/cards/transfer")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":" + a.getId() + ",\"toCardId\":" + a.getId() + ",\"amount\":0}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void transfer_shouldReturn409_whenInsufficientFunds_orBlocked() throws Exception {
+            Owner me = createOwner("conflict@example.com", Role.USER);
+            Card from = createCard(me, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+            Card to   = createCard(me, "2222", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            // недостаточно средств
+            mockMvc.perform(post("/cards/transfer")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":" + from.getId() + ",\"toCardId\":" + to.getId() + ",\"amount\":10}"))
+                    .andExpect(status().isConflict());
+
+            // блокируем исходную карту
+            jdbcTemplate.update("UPDATE card SET status='BLOCKED' WHERE id=?", from.getId());
+
+            mockMvc.perform(post("/cards/transfer")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":" + from.getId() + ",\"toCardId\":" + to.getId() + ",\"amount\":1}"))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
+        void transfer_shouldReturn200_andMoveBalance_whenOwnerAndEnough() throws Exception {
+            Owner me = createOwner("ok@example.com", Role.USER);
+            Card from = createCard(me, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+            Card to   = createCard(me, "2222", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(me.getId(), me.getEmail(), "USER");
+
+            // сначала положим 100 на from
+            mockMvc.perform(post("/cards/{id}/deposit", from.getId())
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"amount\": 100}"))
+                    .andExpect(status().isOk());
+
+            // перевод 40 → balance(from)=60, balance(to)=40
+            mockMvc.perform(post("/cards/transfer")
+                            .with(csrf())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"fromCardId\":" + from.getId() + ",\"toCardId\":" + to.getId() + ",\"amount\":40}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.from.id").value(from.getId().intValue()))
+                    .andExpect(jsonPath("$.from.balance").value(60.00))
+                    .andExpect(jsonPath("$.to.id").value(to.getId().intValue()))
+                    .andExpect(jsonPath("$.to.balance").value(40.00));
+        }
+    }
 }

@@ -2,6 +2,8 @@ package com.example.bankcards.controller;
 
 import com.example.bankcards.dto.CardResponseDTO;
 import com.example.bankcards.dto.DepositRequestDTO;
+import com.example.bankcards.dto.TransferRequestDTO;
+import com.example.bankcards.dto.TransferResponseDTO;
 import com.example.bankcards.security.OwnerDetails;
 import com.example.bankcards.service.CardService;
 import jakarta.validation.Valid;
@@ -48,9 +50,17 @@ public class CardController {
     public CardResponseDTO withdrawMyCard(
             @AuthenticationPrincipal OwnerDetails me,
             @PathVariable Long id,
-            @RequestBody @Valid DepositRequestDTO dto // можно переиспользовать тот же DTO с amount
+            @RequestBody @Valid DepositRequestDTO dto
     ) {
         return cardService.withdrawMyCard(me.getId(), id, dto.getAmount());
     }
+
+    @PostMapping("/transfer")
+    public TransferResponseDTO transferBetweenMyCards(
+            @AuthenticationPrincipal OwnerDetails me,
+            @RequestBody @Valid TransferRequestDTO dto) {
+        return cardService.transferBetweenMyCards(me.getId(), dto.getFromCardId(), dto.getToCardId(), dto.getAmount());
+    }
+
 }
 
