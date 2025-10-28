@@ -23,6 +23,8 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:/db/migration/db.changelog-master.yaml
+    parameters:
+      ADMIN_BCRYPT: "{bcrypt}$2a$10$xYzPQ....HASH...."
 
 server:
   port: 8080

@@ -183,3 +183,22 @@ databaseChangeLog:
             tableName: card
             columnName: status
             newDataType: VARCHAR(16)
+
+  - changeSet:
+      id: 013-insert-default-admin
+      author: you
+      preConditions:
+        onFail: MARK_RAN
+        onError: HALT
+        not:
+          tableExists:
+            tableName: owner_dummy
+      changes:
+        - sql:
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- вставим админа, если такого email ещё нет
+              INSERT INTO owner (first_name, last_name, date_of_birth, email, phone_e164, created_at, updated_at, role, password, is_locked)
+              SELECT 'Admin', 'User', NULL, 'admin@example.com', NULL, NOW(), NOW(), 'ADMIN', '${ADMIN_BCRYPT}', FALSE
+              WHERE NOT EXISTS (SELECT 1 FROM owner WHERE email = 'admin@example.com');
