@@ -9,6 +9,7 @@ import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
 import com.example.bankcards.security.JWTUtil;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -92,7 +93,6 @@ class CardControllerTests {
 
         String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
 
-        // page=0,size=1 -> только newest
         mockMvc.perform(get("/cards?page=0&size=1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
@@ -102,7 +102,6 @@ class CardControllerTests {
                 .andExpect(jsonPath("$.number", is(0)))
                 .andExpect(jsonPath("$.size", is(1)));
 
-        // page=1,size=1 -> второй по новизне (mid)
         mockMvc.perform(get("/cards?page=1&size=1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
@@ -110,6 +109,71 @@ class CardControllerTests {
                 .andExpect(jsonPath("$.content[0].id", is(mid.getId().intValue())))
                 .andExpect(jsonPath("$.number", is(1)))
                 .andExpect(jsonPath("$.size", is(1)));
+    }
+
+    @Nested
+    class GetMyCardTests {
+        @Test
+        void getMyCardById_shouldReturn401_whenUnauthenticated() throws Exception {
+            mockMvc.perform(get("/cards/{id}", 1L))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void getMyCardById_shouldReturn404_whenCardNotOwned() throws Exception {
+            Owner user  = createOwner("user@example.com", Role.USER);
+            Owner other = createOwner("other@example.com", Role.USER);
+
+            Card others = createCard(other, "9999", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(get("/cards/{id}", others.getId())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void getMyCardById_shouldReturn404_whenCardDoesNotExist() throws Exception {
+            Owner user = createOwner("nouser@example.com", Role.USER);
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(get("/cards/{id}", 123456L)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void getMyCardById_shouldReturn200_andDto_whenOwned() throws Exception {
+            Owner user = createOwner("ok@example.com", Role.USER);
+            Card  card = createCard(user, "1111", LocalDateTime.now(), CardStatus.ACTIVE);
+
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(get("/cards/{id}", card.getId())
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(card.getId().intValue())))
+                    .andExpect(jsonPath("$.maskedPan", is("**** **** **** 1111")))
+                    .andExpect(jsonPath("$.status", is("ACTIVE")));
+        }
+
+        @Test
+        void getMyCardById_shouldReturn400_whenIdIsNotNumber() throws Exception {
+            Owner user = createOwner("type@example.com", Role.USER);
+            String token = jwtUtil.generateAccessToken(user.getId(), user.getEmail(), "USER");
+
+            mockMvc.perform(get("/cards/{id}", "abc") // некорректный path param
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.message").value("Invalid value 'abc' for parameter 'id'"))
+                    .andExpect(jsonPath("$.path").value("/cards/abc"));
+        }
     }
 
     // --- helpers ---
@@ -129,9 +193,9 @@ class CardControllerTests {
     private Card createCard(Owner owner, String last4, LocalDateTime createdAt, CardStatus status) {
         Card c = new Card();
         c.setOwner(owner);
-        c.setPan("stub");                 // pan_encrypted NOT NULL обеспечим через конвертер
+        c.setPan("stub");
         c.setPanLast4(last4);
-        c.setBin("400000");               // ✅ ОБЯЗАТЕЛЬНО: BIN not null
+        c.setBin("400000");
         c.setExpiryMonth((short) 10);
         c.setExpiryYear((short) 2030);
         c.setStatus(status);
@@ -140,13 +204,9 @@ class CardControllerTests {
 
         c = cardRepository.save(c);
 
-        // created_at у тебя insertable=false, Liquibase выключен → БД не ставит дефолт.
-        // Проставим вручную через SQL, чтобы сортировка по created_at работала.
-        // убери import java.sql.Timestamp;
-
         jdbcTemplate.update(
                 "UPDATE card SET created_at = ? WHERE id = ?",
-                createdAt,           // <-- LocalDateTime
+                createdAt,
                 c.getId()
         );
 

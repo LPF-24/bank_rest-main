@@ -9,6 +9,7 @@ import com.example.bankcards.entity.Owner;
 import com.example.bankcards.mapper.CardMapper;
 import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -166,6 +167,68 @@ class CardServiceTests {
             verify(cardMapper, times(1)).toResponse(card1);
             verify(cardMapper, times(1)).toResponse(card2);
             verifyNoMoreInteractions(cardRepository, cardMapper);
+        }
+    }
+
+    @Nested
+    class GetMyCardByIdTests {
+
+        @Test
+        void getMyCardById_shouldReturnDto_whenOwned() {
+            Long ownerId = 10L;
+            Long cardId  = 111L;
+
+            Card card = new Card();
+            card.setId(cardId);
+            card.setPan("stub");         // pan_encrypted через конвертер, поле не null
+            card.setPanLast4("1234");
+            card.setBin("400000");       // bin обязателен по entity
+            card.setExpiryMonth((short) 10);
+            card.setExpiryYear((short) 2030);
+            card.setStatus(CardStatus.ACTIVE);
+            card.setBalance(BigDecimal.ZERO);
+            card.setCurrency(Currency.USD);
+
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.of(card));
+
+            CardResponseDTO dto = new CardResponseDTO();
+            dto.setId(cardId);
+            dto.setMaskedPan("**** **** **** 1234");
+            dto.setExpiryMonth((short) 10);
+            dto.setExpiryYear((short) 2030);
+            dto.setStatus(CardStatus.ACTIVE);
+            dto.setBalance(BigDecimal.ZERO);
+            dto.setCurrency(Currency.USD);
+
+            when(cardMapper.toResponse(card)).thenReturn(dto);
+
+            CardResponseDTO result = cardService.getMyCardById(ownerId, cardId);
+
+            assertNotNull(result);
+            assertEquals(cardId, result.getId());
+            assertEquals("**** **** **** 1234", result.getMaskedPan());
+            assertEquals(CardStatus.ACTIVE, result.getStatus());
+
+            verify(cardRepository).findByIdAndOwnerId(cardId, ownerId);
+            verify(cardMapper).toResponse(card);
+            verifyNoMoreInteractions(cardRepository, cardMapper);
+        }
+
+        @Test
+        void getMyCardById_shouldThrowEntityNotFound_whenNotOwnedOrMissing() {
+            Long ownerId = 10L;
+            Long cardId  = 222L;
+
+            when(cardRepository.findByIdAndOwnerId(cardId, ownerId)).thenReturn(Optional.empty());
+
+            EntityNotFoundException ex = assertThrows(
+                    EntityNotFoundException.class,
+                    () -> cardService.getMyCardById(ownerId, cardId)
+            );
+            assertTrue(ex.getMessage().contains("Card not found"));
+
+            verify(cardRepository).findByIdAndOwnerId(cardId, ownerId);
+            verifyNoInteractions(cardMapper);
         }
     }
 }

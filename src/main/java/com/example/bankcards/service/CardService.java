@@ -10,6 +10,7 @@ import com.example.bankcards.mapper.CardMapper;
 import com.example.bankcards.repository.CardRepository;
 import com.example.bankcards.repository.OwnerRepository;
 import com.example.bankcards.util.PanGenerator;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -81,5 +82,12 @@ public class CardService {
     public Page<CardResponseDTO> getMyCards(Long ownerId, Pageable pageable) {
         return cardRepository.findAllByOwnerId(ownerId, pageable)
                 .map(cardMapper::toResponse);
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    public CardResponseDTO getMyCardById(Long ownerId, Long cardId) {
+        Card card = cardRepository.findByIdAndOwnerId(cardId, ownerId)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+        return cardMapper.toResponse(card);
     }
 }

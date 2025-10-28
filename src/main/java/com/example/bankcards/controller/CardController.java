@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +27,13 @@ public class CardController {
             @AuthenticationPrincipal OwnerDetails ownerDetails,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return cardService.getMyCards(ownerDetails.getId(), pageable);
+    }
+
+    @GetMapping("/{id}")
+    public CardResponseDTO getMyCard(
+            @AuthenticationPrincipal OwnerDetails me,
+            @PathVariable Long id) {
+        return cardService.getMyCardById(me.getId(), id);
     }
 }
 
