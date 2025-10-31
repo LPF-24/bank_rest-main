@@ -4,6 +4,7 @@ import com.example.bankcards.exception.CustomAccessDeniedHandler;
 import com.example.bankcards.exception.CustomAuthenticationEntryPoint;
 import com.example.bankcards.security.OwnerDetailsService;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,6 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import com.example.bankcards.security.JWTFilter;
 import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -51,9 +53,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, @Qualifier("corsConfigurationSource") CorsConfigurationSource cors) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(c -> c.configurationSource(cors))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(
                         SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

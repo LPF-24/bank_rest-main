@@ -24,7 +24,7 @@ spring:
     enabled: true
     change-log: classpath:/db/migration/db.changelog-master.yaml
     parameters:
-      ADMIN_BCRYPT: "{bcrypt}$2a$10$xYzPQ....HASH...."
+      ADMIN_BCRYPT: "$2a$10$6Q3gia/juxx9lH4EEmgPWOYY9jBbxZcxQ7iHVxANSMpPCvYIFFmBq"
 
 server:
   port: 8080
@@ -50,6 +50,10 @@ jwt_secret: 8f2e4b0093a94c35b6d17fcf0a51980485ae71b4f6f064f3869e7092e7b40acd
 app:
   security:
     admin-activation-code: work2025admin
+    jwt:
+      expiration: PT1H   # ISO-8601 Duration: 1 час. Примеры: PT30M, PT24H, P7D
+  cors:
+    allowed-origins: "*"
 
 card:
   bin: "400000"

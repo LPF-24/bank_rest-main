@@ -16,8 +16,12 @@ public class JWTUtil {
     @Value("${jwt_secret}")
     private String secret;
 
+    @Value("${app.security.jwt.expiration}")
+    private java.time.Duration expiration;
+
     public String generateAccessToken(Long id, String email, String role) {
-        Date expirationDate = Date.from(ZonedDateTime.now().plusMinutes(60).toInstant());
+        var now = java.time.Instant.now();
+        var exp = now.plus(expiration);
 
         return JWT.create()
                 .withSubject("Owner details")
@@ -26,7 +30,7 @@ public class JWTUtil {
                 .withClaim("role", role)
                 .withIssuedAt(new Date())
                 .withIssuer("ADMIN")
-                .withExpiresAt(expirationDate)
+                .withExpiresAt(java.util.Date.from(exp))
                 .sign(Algorithm.HMAC256(secret));
     }
 
